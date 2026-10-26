@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1D4F9C">
+<title>通勤ラジオ</title>
+<link rel="icon" href="cover.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+:root {
+  --sign: #1D4F9C;       /* 案内標識の青 */
+  --sign-ink: #FFFFFF;
+  --amber: #E8A300;      /* 信号・LEDのアンバー（重要度・注意） */
+  --go: #1E8A57;         /* 完了 */
+  --stop: #C8372D;       /* エラー */
+  --ink: #1B2430;
+  --muted: #5B6675;
+  --road: #EDF0F3;       /* 背景 */
+  --panel: #FFFFFF;
+  --line: #D3D9E1;
+  --field: #FFFFFF;
+  --chip: #E3E8EE;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sign: #2559AE; --ink: #E6EBF1; --muted: #9AA6B4; --road: #13171C;
+    --panel: #1B2128; --line: #2D3641; --field: #10151A; --chip: #26303A; --amber: #F0B323;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--road); color: var(--ink);
+  font-family: "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+  font-size: 16px; line-height: 1.7;
+}
+main { max-width: 640px; margin: 0 auto; padding: 16px 16px 120px; }
+a { color: var(--sign); }
+@media (prefers-color-scheme: dark) { a { color: #8DB4F5; } }
+:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+h2 { font-size: 18px; margin: 32px 0 8px; }
+h3 { font-size: 16px; margin: 0; }
+p { margin: 0 0 8px; }
+.muted { color: var(--muted); font-size: 14px; }
+.hidden { display: none !important; }
+
+/* ---- 案内標識（いちばん目立たせる要素） ---- */
+.sign { background: var(--sign); color: var(--sign-ink); border-radius: 16px; padding: 6px; }
+.sign-inner { border: 3px solid var(--sign-ink); border-radius: 11px; padding: 14px 16px 16px; }
+.sign-title { font-size: 28px; font-weight: 700; letter-spacing: .06em; margin: 0; line-height: 1.3; }
+.sign-sub { font-size: 14px; opacity: .9; margin: 2px 0 0; }
+.dest { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; margin-top: 14px;
+  padding-top: 14px; border-top: 2px solid rgba(255,255,255,.55); }
+.dest svg { width: 34px; height: 42px; }
+.dest-name { font-size: 20px; font-weight: 700; line-height: 1.35; }
+.dest-meta { font-size: 13px; opacity: .9; }
+.route { background: var(--sign-ink); color: var(--sign); font-weight: 700; font-size: 17px; border-radius: 8px;
+  padding: 2px 10px; font-variant-numeric: tabular-nums; }
+.player { width: 100%; margin-top: 10px; }
+
+/* ---- タブ ---- */
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 16px 0 4px; background: var(--chip);
+  padding: 4px; border-radius: 12px; }
+.tabs button { border: 0; border-radius: 9px; min-height: 44px; font: inherit; font-weight: 700; color: var(--muted);
+  background: transparent; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+/* ---- 共通パーツ ---- */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px;
+  border-radius: 10px; border: 2px solid var(--sign); background: var(--sign); color: #fff; font: inherit; font-weight: 700;
+  text-decoration: none; cursor: pointer; }
+.btn.secondary { background: transparent; color: var(--sign); }
+@media (prefers-color-scheme: dark) { .btn.secondary { color: #8DB4F5; border-color: #8DB4F5; } }
+.btn.quiet { border-color: var(--line); background: transparent; color: var(--ink); font-weight: 400; min-height: 40px; padding: 0 12px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; }
+.row > .btn { flex: 1 1 200px; }
+.url { font-size: 13px; color: var(--muted); word-break: break-all; margin-top: 8px; }
+
+.status { margin-top: 12px; padding: 10px 12px 10px 14px; border-left: 4px solid var(--muted); background: var(--panel);
+  border-radius: 0 10px 10px 0; font-size: 14px; }
+.status.ok { border-left-color: var(--go); }
+.status.warn { border-left-color: var(--amber); }
+.status.error { border-left-color: var(--stop); }
+.status details { margin-top: 4px; }
+
+.episodes { list-style: none; margin: 0; padding: 0; }
+.episodes li { border-bottom: 1px solid var(--line); }
+.episodes summary { list-style: none; display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px 2px; cursor: pointer; }
+.episodes summary::-webkit-details-marker { display: none; }
+.ep-title { font-weight: 700; }
+.ep-meta { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.chev { color: var(--muted); font-size: 18px; line-height: 1; align-self: center; }
+.episodes details[open] .chev { transform: rotate(180deg); }
+.ep-body { padding: 0 2px 14px; }
+.topics { margin: 8px 0; padding-left: 0; list-style: none; font-size: 15px; }
+.topics li { border: 0; padding: 4px 0; }
+.genre-tag { display: inline-block; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px;
+  padding: 0 6px; margin-right: 6px; }
+.script { white-space: pre-wrap; font-size: 14px; background: var(--road); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+
+/* ---- フォーム ---- */
+label.field { display: block; margin: 12px 0 0; }
+.field > span { display: block; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.field small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; line-height: 1.5; }
+input[type=text], input[type=password], input[type=number], input[type=url], textarea, select {
+  width: 100%; font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; min-height: 46px; }
+textarea { min-height: 84px; resize: vertical; line-height: 1.6; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button { flex: 1 1 0; min-height: 44px; border: 1px solid var(--line); background: var(--field); color: var(--ink);
+  border-radius: 8px; font: inherit; cursor: pointer; padding: 0 8px; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--sign); border-color: var(--sign); color: #fff; font-weight: 700; }
+.seg.days button { flex: 1 1 0; padding: 0; min-width: 38px; }
+
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; white-space: nowrap; }
+.switch input { appearance: none; -webkit-appearance: none; width: 48px; height: 28px; border-radius: 14px; background: var(--chip);
+  position: relative; margin: 0; cursor: pointer; border: 1px solid var(--line); flex: none; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s; }
+.switch input:checked { background: var(--go); border-color: var(--go); }
+.switch input:checked::after { left: 22px; }
+@media (prefers-reduced-motion: reduce) { .switch input::after { transition: none; } }
+
+/* ジャンル: 左の帯の色と太さが重要度（低=灰・中=青・高=アンバー） */
+.genre { background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--sign); border-radius: 10px;
+  padding: 12px 14px 14px; margin-top: 12px; }
+.genre[data-p="1"] { border-left-color: var(--muted); border-left-width: 4px; }
+.genre[data-p="3"] { border-left-color: var(--amber); border-left-width: 9px; }
+.genre.off { opacity: .55; }
+.genre-head { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.genre-head input { font-weight: 700; }
+.genre .seg[data-role=priority] button[aria-pressed="true"][data-v="3"] { background: var(--amber); border-color: var(--amber); color: #1B2430; }
+.genre .seg[data-role=priority] button[aria-pressed="true"][data-v="1"] { background: var(--muted); border-color: var(--muted); }
+.genre details { margin-top: 10px; }
+.genre summary { cursor: pointer; color: var(--muted); font-size: 14px; min-height: 32px; }
+.genre-tools { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+
+.savebar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line);
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); z-index: 10; }
+.savebar-inner { max-width: 640px; margin: 0 auto; }
+.savebar .note { font-size: 13px; color: var(--muted); margin-bottom: 6px; min-height: 1em; }
+.savebar .row { flex-wrap: nowrap; }
+.savebar .row > .btn { flex: 1 1 0; padding: 0 10px; }
+.savebar .note.dirty { color: var(--amber); font-weight: 700; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: 120px; max-width: 608px; margin: 0 auto; background: var(--ink);
+  color: var(--road); border-radius: 10px; padding: 12px 14px; font-size: 15px; z-index: 20; }
+.toast.error { background: var(--stop); color: #fff; }
+</style>
+</head>
+<body>
+<main>
+  <header class="sign" aria-label="番組">
+    <div class="sign-inner">
+      <p class="sign-title" id="progTitle">通勤ラジオ</p>
+      <p class="sign-sub" id="progSub">毎朝届く、自分専用のニュース番組</p>
+      <div class="dest" id="dest" hidden>
+        <svg viewBox="0 0 34 42" aria-hidden="true"><path d="M17 2 L32 18 H22 V40 H12 V18 H2 Z" fill="currentColor"/></svg>
+        <div><div class="dest-name" id="destName"></div><div class="dest-meta" id="destMeta"></div></div>
+        <span class="route" id="destLen"></span>
+      </div>
+    </div>
+  </header>
+  <audio class="player hidden" id="latestPlayer" controls preload="none"></audio>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabShow" aria-selected="true" aria-controls="viewShow">番組</button>
+    <button role="tab" id="tabSettings" aria-selected="false" aria-controls="viewSettings">設定</button>
+  </nav>
+
+  <!-- ===================== 番組 ===================== -->
+  <section id="viewShow" role="tabpanel" aria-labelledby="tabShow">
+    <div id="runStatus" class="status hidden"></div>
+
+    <h2>最近の回</h2>
+    <ul class="episodes" id="episodeList"></ul>
+    <p class="muted" id="emptyEpisodes" hidden>まだ番組がありません。毎朝5時ごろに作成されます。すぐ作りたいときは「今すぐ番組を作る」を押してください。</p>
+    <div class="row" style="margin-top:16px">
+      <button class="btn secondary" id="runNowShow" type="button">今すぐ番組を作る</button>
+    </div>
+
+    <h2>スマホに登録</h2>
+    <div class="panel">
+      <p>AntennaPod に登録すると、新しい回が毎朝自動でダウンロードされ、車ではBluetoothやAndroid Autoで聞けます。</p>
+      <div class="row">
+        <a class="btn" id="apLink" href="#">AntennaPodで登録</a>
+        <button class="btn secondary" id="copyFeed" type="button">フィードのURLをコピー</button>
+      </div>
+      <p class="url" id="feedUrl"></p>
+    </div>
+  </section>
+
+  <!-- ===================== 設定 ===================== -->
+  <section id="viewSettings" role="tabpanel" aria-labelledby="tabSettings" hidden>
+    <div class="panel" id="connectPanel" style="margin-top:12px">
+      <h3 id="connectTitle">GitHubとつなぐ</h3>
+      <p class="muted" id="connectHelp">ジャンルなどの設定を変えたり、番組を今すぐ作ったりするには、最初に1回だけGitHubとつなぎます。トークンはこのスマホのブラウザにだけ保存されます。</p>
+      <div id="connectForm">
+        <label class="field"><span>リポジトリ</span>
+          <input type="text" id="repoInput" placeholder="ユーザー名/リポジトリ名" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <div class="field"><span>1. トークンを作る</span>
+          <a class="btn secondary" id="tokenLink" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHubでトークンを作る</a>
+          <small>名前と権限が入力済みの画面が開きます。「Repository access」で「Only select repositories」を選んでこのリポジトリを選び、いちばん下の「Generate token」を押します。表示された github_pat_ で始まる文字列をコピーします。</small></div>
+        <label class="field"><span>2. トークンを貼り付ける</span>
+          <input type="password" id="tokenInput" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <div class="row" style="margin-top:12px"><button class="btn" id="connectBtn" type="button">つないで設定を読み込む</button></div>
+      </div>
+      <div id="connectedRow" class="row hidden" style="margin-top:8px">
+        <button class="btn quiet" id="reloadBtn" type="button">読み込み直す</button>
+        <button class="btn quiet" id="disconnectBtn" type="button">トークンをこのスマホから消す</button>
+      </div>
+    </div>
+
+    <div id="form" class="hidden">
+      <h2>ジャンル</h2>
+      <p class="muted">キーワードでGoogleニュースを検索して候補を集め、AIが聞きたそうな話題を選びます。上にあるジャンルから順に放送します。</p>
+      <div id="genreList"></div>
+      <div class="row" style="margin-top:12px"><button class="btn secondary" id="addGenre" type="button">ジャンルを追加</button></div>
+
+      <h2>番組の形式</h2>
+      <div class="panel">
+        <div class="field"><span>スタイル</span>
+          <div class="seg" id="styleSeg">
+            <button type="button" data-v="dialogue">2人の掛け合い</button>
+            <button type="button" data-v="single">1人のアナウンサー</button>
+          </div></div>
+        <label class="field"><span>長さ <span id="minutesOut"></span></span>
+          <input type="range" id="minutes" min="3" max="30" step="1"></label>
+        <label class="field"><span>話題の数（最大） <span id="topicsOut"></span></span>
+          <input type="range" id="maxTopics" min="3" max="15" step="1"></label>
+        <div class="field"><span>話す速さ</span>
+          <div class="seg" id="rateSeg">
+            <button type="button" data-v="-10%">ゆっくり</button>
+            <button type="button" data-v="+0%">標準</button>
+            <button type="button" data-v="+10%">やや速い</button>
+            <button type="button" data-v="+20%">速い</button>
+          </div></div>
+        <div class="field"><span>作成する曜日</span>
+          <div class="seg days" id="daysSeg"></div>
+          <small>毎朝5時ごろに作成します（時刻の変更はREADMEを参照）。</small></div>
+      </div>
+
+      <h2>リスナーの希望</h2>
+      <div class="panel">
+        <label class="field" style="margin-top:0"><span>話題の選び方や話し方の希望</span>
+          <textarea id="interestNote" placeholder="例: 朝なので明るいトーンで。専門用語は短く補足して。"></textarea></label>
+      </div>
+
+      <h2>天気</h2>
+      <div class="panel">
+        <label class="switch"><input type="checkbox" id="wxOn"> 番組の最初に天気を伝える</label>
+        <label class="field"><span>地点の名前</span><input type="text" id="wxPlace"></label>
+        <div class="two">
+          <label class="field"><span>緯度</span><input type="number" id="wxLat" step="0.0001" inputmode="decimal"></label>
+          <label class="field"><span>経度</span><input type="number" id="wxLon" step="0.0001" inputmode="decimal"></label>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="btn quiet" id="wxHere" type="button">今いる場所の緯度・経度を入れる</button></div>
+        <div class="two">
+          <div class="field"><span>行きの時間帯</span><div class="two"><select id="goFrom"></select><select id="goTo"></select></div></div>
+          <div class="field"><span>帰りの時間帯</span><div class="two"><select id="backFrom"></select><select id="backTo"></select></div></div>
+        </div>
+        <small class="muted">この時間帯の降水確率と、雪・霧・凍結の注意を伝えます。</small>
+      </div>
+
+      <h2>出演者</h2>
+      <div class="panel">
+        <div class="two">
+          <label class="field" style="margin-top:0"><span>進行役の名前</span><input type="text" id="hostAName"></label>
+          <label class="field" style="margin-top:0"><span>声</span><select id="hostAVoice"></select></label>
+        </div>
+        <div class="two" id="hostBRow">
+          <label class="field"><span>解説役の名前</span><input type="text" id="hostBName"></label>
+          <label class="field"><span>声</span><select id="hostBVoice"></select></label>
+        </div>
+      </div>
+
+      <h2>詳しい設定</h2>
+      <div class="panel">
+        <label class="field" style="margin-top:0"><span>番組名</span><input type="text" id="progTitleIn"></label>
+        <label class="field"><span>番組の説明</span><input type="text" id="progDescIn"></label>
+        <div class="two">
+          <label class="field"><span>残す回数</span><input type="number" id="keepEp" min="1" max="60" inputmode="numeric"></label>
+          <label class="field"><span>ニュースの対象（時間）</span><input type="number" id="lookback" min="6" max="168" inputmode="numeric"></label>
+        </div>
+        <label class="field"><span>Geminiのモデル</span><input type="text" id="gmModel" autocapitalize="off" spellcheck="false">
+          <small>通常は gemini-flash-latest のままで大丈夫です。</small></label>
+        <label class="switch" style="margin-top:14px"><input type="checkbox" id="gmSearch"> 見出しだけの話題はGoogle検索で補足する</label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="savebar hidden" id="savebar">
+  <div class="savebar-inner">
+    <div class="note" id="saveNote">変更はまだありません</div>
+    <div class="row">
+      <button class="btn" id="saveBtn" type="button">保存</button>
+      <button class="btn secondary" id="saveRunBtn" type="button">保存して作成</button>
+    </div>
+  </div>
+</div>
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+<template id="genreTpl">
+  <div class="genre">
+    <div class="genre-head">
+      <input type="text" data-k="name" aria-label="ジャンル名" placeholder="ジャンル名">
+      <label class="switch"><input type="checkbox" data-k="enabled"> 放送</label>
+    </div>
+    <div class="field"><span>重要度</span>
+      <div class="seg" data-role="priority">
+        <button type="button" data-v="1">低</button><button type="button" data-v="2">中</button><button type="button" data-v="3">高</button>
+      </div></div>
+    <label class="field"><span>キーワード</span>
+      <textarea data-k="keywords" placeholder="1行に1つ。例: ベガルタ仙台"></textarea>
+      <small>1行に1つ。スペースで区切るとすべての語を含む記事を探します。</small></label>
+    <details>
+      <summary>RSS、除外ワード、要望</summary>
+      <label class="field"><span>RSSのURL</span><textarea data-k="feeds" placeholder="https://…（1行に1つ）"></textarea>
+        <small>よく読むサイトのRSSがあれば追加できます。</small></label>
+      <label class="field"><span>除外ワード</span><textarea data-k="exclude" placeholder="見出しにこの言葉があれば外す（1行に1つ）"></textarea></label>
+      <label class="field"><span>このジャンルへの要望</span><input type="text" data-k="note" placeholder="例: 試合結果は詳しく"></label>
+    </details>
+    <div class="genre-tools">
+      <button class="btn quiet" type="button" data-act="up" aria-label="上へ">上へ</button>
+      <button class="btn quiet" type="button" data-act="down" aria-label="下へ">下へ</button>
+      <button class="btn quiet" type="button" data-act="del">削除</button>
+    </div>
+  </div>
+</template>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (s, el = document) => el.querySelector(s);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+  const DAYS = [["mon","月"],["tue","火"],["wed","水"],["thu","木"],["fri","金"],["sat","土"],["sun","日"]];
+  const VOICES = [["ja-JP-NanamiNeural","ナナミ（女性）"],["ja-JP-KeitaNeural","ケイタ（男性）"]];
+  const WF = "daily.yml";
+
+  function guessRepo() {
+    const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
+    if (!m) return "";
+    const seg = location.pathname.split("/").filter(Boolean)[0];
+    return seg && !/\.html?$/.test(seg) ? `${m[1]}/${seg}` : `${m[1]}/${m[1]}.github.io`;
+  }
+  const state = { repo: store.get("cr.repo") || guessRepo(), token: store.get("cr.token") || "",
+    branch: null, sha: null, cfg: null, dirty: false, episodes: null };
+
+  // ---------------- 小物
+  let toastTimer;
+  function toast(msg, isError) {
+    const t = $("#toast");
+    t.textContent = msg; t.className = "toast" + (isError ? " error" : "");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), isError ? 8000 : 4000);
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function fmtDur(sec) { sec = Math.round(sec || 0); return `${Math.floor(sec / 60)}分${String(sec % 60).padStart(2, "0")}秒`; }
+  function fmtClock(sec) { sec = Math.round(sec || 0); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`; }
+  function fmtWhen(iso) {
+    const d = new Date(iso); if (isNaN(d)) return "";
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+  function el(tag, attrs = {}, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+    }
+    for (const kid of kids) if (kid != null) e.append(kid);
+    return e;
+  }
+  const lines = v => (Array.isArray(v) ? v : String(v || "").split(/\n/)).map(s => String(s).trim()).filter(Boolean);
+  function b64ToUtf8(b64) {
+    const bin = atob(b64.replace(/\s/g, ""));
+    return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+  }
+  function utf8ToB64(str) {
+    const bytes = new TextEncoder().encode(str); let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
+  // ---------------- タブ
+  function showTab(name) {
+    const settings = name === "settings";
+    $("#tabShow").setAttribute("aria-selected", String(!settings));
+    $("#tabSettings").setAttribute("aria-selected", String(settings));
+    $("#viewShow").hidden = settings; $("#viewSettings").hidden = !settings;
+    // 設定フォームと保存バーは GitHub とつないだ後だけ出す（つなぐ前に編集して保存できない、を防ぐ）
+    $("#savebar").classList.toggle("hidden", !(settings && state.cfg && state.token));
+    if (settings && !state.cfg && state.repo && state.token) loadConfig().catch(() => {});
+    history.replaceState(null, "", settings ? "#settings" : location.pathname + location.search);
+  }
+  $("#tabShow").onclick = () => showTab("show");
+  $("#tabSettings").onclick = () => showTab("settings");
+
+  // ---------------- 番組
+  const feedUrl = () => new URL("feed.xml", location.href).href;
+  function renderShow(data) {
+    const title = (data && data.title) || "通勤ラジオ";
+    $("#progTitle").textContent = title; document.title = title;
+    if (data && data.description) $("#progSub").textContent = data.description;
+    const feed = (data && data.feed) || feedUrl();
+    $("#feedUrl").textContent = feed;
+    $("#apLink").href = `https://antennapod.org/deeplink/subscribe?url=${encodeURIComponent(feed)}&title=${encodeURIComponent(title)}`;
+    $("#copyFeed").onclick = async () => {
+      try { await navigator.clipboard.writeText(feed); toast("フィードのURLをコピーしました"); }
+      catch { toast("コピーできませんでした。下のURLを長押ししてコピーしてください", true); }
+    };
+
+    const eps = (data && data.episodes) || [];
+    const list = $("#episodeList"); list.textContent = "";
+    $("#emptyEpisodes").hidden = eps.length > 0;
+    if (eps.length) {
+      const ep = eps[0];
+      $("#dest").hidden = false;
+      const d = new Date(ep.date);
+      $("#destName").textContent = isNaN(d) ? ep.title : `${d.getMonth() + 1}月${d.getDate()}日（${"日月火水木金土"[d.getDay()]}）の回`;
+      $("#destMeta").textContent = isNaN(d) ? "" :
+        `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")} 作成　${ep.mode === "fallback" ? "簡易版" : "話題 " + (ep.topics || []).length + "本"}`;
+      $("#destLen").textContent = fmtClock(ep.duration);
+      const pl = $("#latestPlayer"); pl.classList.remove("hidden");
+      if (pl.getAttribute("src") !== ep.file) pl.setAttribute("src", ep.file);
+    }
+    eps.forEach((ep, i) => {
+      const body = el("div", { class: "ep-body" });
+      const det = el("details", {},
+        el("summary", {}, el("div", {}, el("div", { class: "ep-title", text: ep.title }),
+          el("div", { class: "ep-meta", text: `${fmtDur(ep.duration)}　${ep.mode === "fallback" ? "簡易版" : "話題 " + (ep.topics || []).length + "本"}` })),
+          el("span", { class: "chev", "aria-hidden": "true", text: "▾" })),
+        body);
+      det.addEventListener("toggle", () => {
+        if (!det.open || body.childElementCount) return;
+        if (i > 0) body.append(el("audio", { controls: "", preload: "none", src: ep.file, class: "player" }));
+        if (ep.weather) body.append(el("p", { class: "muted", text: ep.weather }));
+        const ul = el("ul", { class: "topics" });
+        for (const t of ep.topics || []) {
+          const a = el("a", { href: t.link, target: "_blank", rel: "noopener", text: t.title });
+          ul.append(el("li", {}, el("span", { class: "genre-tag", text: t.genre }), a, t.source ? `（${t.source}）` : ""));
+        }
+        body.append(ul);
+        if (ep.script) {
+          const btn = el("button", { class: "btn quiet", type: "button", text: "台本を見る" });
+          btn.onclick = async () => {
+            btn.disabled = true;
+            try { const r = await fetch(ep.script, { cache: "no-store" }); body.append(el("div", { class: "script", text: await r.text() })); btn.remove(); }
+            catch { btn.disabled = false; toast("台本を読み込めませんでした", true); }
+          };
+          body.append(btn);
+        }
+      });
+      list.append(el("li", {}, det));
+    });
+
+    const lr = data && data.last_run;
+    const box = $("#runStatus");
+    if (lr) {
+      const kind = lr.result === "ok" ? "ok" : lr.result === "skipped" ? "" : "warn";
+      const label = lr.result === "ok" ? "作成しました" : lr.result === "skipped" ? "お休みしました" : "簡易版で作成しました（AIが使えませんでした）";
+      box.className = "status " + kind; box.textContent = "";
+      box.append(el("div", { text: `最終実行 ${fmtWhen(lr.time)}：${label}` }));
+      if (lr.message && lr.result !== "skipped") box.append(el("div", { class: "muted", text: lr.message }));
+      if (lr.warnings && lr.warnings.length) {
+        const d = el("details", {}, el("summary", { text: `注意 ${lr.warnings.length}件` }));
+        const ul = el("ul"); lr.warnings.forEach(w => ul.append(el("li", { text: w }))); d.append(ul); box.append(d);
+      }
+    }
+  }
+  async function loadEpisodes() {
+    try {
+      const r = await fetch("episodes.json", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      state.episodes = await r.json();
+    } catch { state.episodes = null; }
+    renderShow(state.episodes);
+  }
+
+  // ---------------- GitHub API
+  async function gh(path, opts = {}) {
+    const headers = { Accept: "application/vnd.github+json" };
+    if (state.token) headers.Authorization = "Bearer " + state.token;
+    if (opts.body) headers["Content-Type"] = "application/json";
+    let res;
+    try {
+      res = await fetch("https://api.github.com" + path, { method: opts.method || "GET", headers, cache: "no-store",
+        body: opts.body ? JSON.stringify(opts.body) : undefined });
+    } catch (e) { const err = new Error("ネットワークエラー"); err.status = 0; throw err; }
+    if (res.status === 204) return null;
+    let data = null; try { data = await res.json(); } catch {}
+    if (!res.ok) { const err = new Error((data && data.message) || res.statusText); err.status = res.status; throw err; }
+    return data;
+  }
+  function explain(err) {
+    switch (err.status) {
+      case 401: return "トークンが無効か期限切れです。作り直して入れ直してください。";
+      case 403: return "トークンの権限が足りません。対象をこのリポジトリにし、Contents と Actions を「Read and write」にしてください。";
+      case 404: return state.token ? "リポジトリかファイルが見つかりません。リポジトリ名と、トークンの対象リポジトリを確認してください。"
+                                   : "リポジトリが見つかりません。リポジトリ名を確認するか、トークンを入れてください。";
+      case 409: case 422: return "ほかの場所で設定が変わっていました。「読み込み直す」を押してから、もう一度保存してください。";
+      default: return `GitHubとの通信に失敗しました（${err.message || "不明なエラー"}）`;
+    }
+  }
+  function needToken() {
+    if (state.token) return false;
+    showTab("settings"); $("#tokenInput").focus();
+    toast("先にトークンを入れて、GitHubとつないでください", true);
+    return true;
+  }
+
+  // ---------------- 接続
+  // 名前・有効期限・権限を入れた状態でトークン作成画面を開くURL（リポジトリの選択だけは手動）
+  function tokenUrl(repo) {
+    const owner = String(repo || "").split("/")[0];
+    const q = new URLSearchParams({ name: "通勤ラジオ",
+      description: "通勤ラジオの設定画面から、設定の保存と番組の作成を行うためのトークン",
+      expires_in: "366", contents: "write", actions: "write" });
+    if (/^[\w.-]+$/.test(owner)) q.set("target_name", owner);
+    return "https://github.com/settings/personal-access-tokens/new?" + q.toString();
+  }
+  $("#repoInput").oninput = () => { $("#tokenLink").href = tokenUrl($("#repoInput").value.trim()); };
+
+  function renderConnect() {
+    $("#repoInput").value = state.repo;
+    $("#tokenLink").href = tokenUrl(state.repo);
+    const connected = !!state.token;
+    $("#connectForm").classList.toggle("hidden", connected);
+    $("#connectedRow").classList.toggle("hidden", !connected);
+    $("#connectTitle").textContent = connected ? `つながっています：${state.repo}` : "GitHubとつなぐ";
+    $("#connectHelp").classList.toggle("hidden", connected);
+  }
+  $("#connectBtn").onclick = async () => {
+    const repo = $("#repoInput").value.trim().replace(/^https:\/\/github\.com\//, "").replace(/\/+$/, "");
+    const token = $("#tokenInput").value.trim();
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return toast("リポジトリは「ユーザー名/リポジトリ名」の形で入れてください", true);
+    if (!token) return toast("トークンを入れてください", true);
+    state.repo = repo; state.token = token;
+    try {
+      await loadConfig(true);
+      store.set("cr.repo", repo); store.set("cr.token", token);
+      $("#tokenInput").value = ""; renderConnect(); toast("つながりました。設定を読み込みました");
+    } catch (e) { state.token = ""; renderConnect(); }
+  };
+  $("#disconnectBtn").onclick = () => {
+    if (state.dirty && !confirm("保存していない変更があります。捨ててトークンを消しますか？")) return;
+    store.del("cr.token"); state.token = ""; state.cfg = null; setDirty(false);
+    $("#form").classList.add("hidden"); $("#savebar").classList.add("hidden");
+    renderConnect(); toast("このスマホからトークンを消しました");
+  };
+  $("#reloadBtn").onclick = () => {
+    if (state.dirty && !confirm("保存していない変更を捨てて読み込み直しますか？")) return;
+    loadConfig(true).then(() => toast("読み込み直しました")).catch(() => {});
+  };
+
+  // ---------------- 設定の読み込み・保存
+  async function loadConfig(throwOnError) {
+    try {
+      const info = await gh(`/repos/${state.repo}`);
+      state.branch = info.default_branch;
+      const file = await gh(`/repos/${state.repo}/contents/config.json?ref=${encodeURIComponent(state.branch)}`);
+      state.sha = file.sha;
+      state.cfg = JSON.parse(b64ToUtf8(file.content));
+      normalize(state.cfg);
+      renderForm(); setDirty(false);
+      $("#form").classList.remove("hidden");
+      $("#savebar").classList.toggle("hidden", $("#viewSettings").hidden);
+    } catch (e) {
+      toast(e instanceof SyntaxError ? "config.json の書式が壊れています。GitHub上で直してください。" : explain(e), true);
+      if (throwOnError) throw e;
+    }
+  }
+  function normalize(c) {
+    c.program = c.program || {}; const p = c.program;
+    p.hosts = Array.isArray(p.hosts) ? p.hosts : [];
+    while (p.hosts.length < 2) p.hosts.push(p.hosts.length ? { name: "ケイタ", voice: "ja-JP-KeitaNeural", role: "解説役" } : { name: "ナナミ", voice: "ja-JP-NanamiNeural", role: "進行役" });
+    p.days = Array.isArray(p.days) ? p.days : ["mon","tue","wed","thu","fri"];
+    c.genres = Array.isArray(c.genres) ? c.genres : [];
+    c.weather = c.weather || {}; c.gemini = c.gemini || {};
+  }
+  function setDirty(d) {
+    state.dirty = d;
+    const n = $("#saveNote");
+    n.textContent = d ? "保存していない変更があります" : "変更はまだありません";
+    n.classList.toggle("dirty", d);
+  }
+  window.addEventListener("beforeunload", e => { if (state.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+  function segBind(seg, value, onPick) {
+    for (const b of seg.querySelectorAll("button")) {
+      b.setAttribute("aria-pressed", String(b.dataset.v === String(value)));
+      b.onclick = () => {
+        for (const x of seg.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+        onPick(b.dataset.v); setDirty(true);
+      };
+    }
+  }
+  function bindInput(id, get, set, ev = "input") {
+    const e = $("#" + id); get(e);
+    e["on" + ev] = () => { set(e); setDirty(true); };  // 読み込み直しても二重に登録されないよう代入で設定
+  }
+  function fillSelect(sel, options, value) {
+    sel.textContent = "";
+    for (const [v, label] of options) sel.append(el("option", { value: v, text: label }));
+    sel.value = String(value);
+  }
+
+  function renderForm() {
+    const c = state.cfg, p = c.program, w = c.weather, g = c.gemini;
+    renderGenres();
+    segBind($("#styleSeg"), p.style || "dialogue", v => { p.style = v; $("#hostBRow").classList.toggle("hidden", v === "single"); });
+    $("#hostBRow").classList.toggle("hidden", p.style === "single");
+    const mOut = () => $("#minutesOut").textContent = `約${p.target_minutes || 10}分`;
+    bindInput("minutes", e => { e.value = p.target_minutes || 10; mOut(); }, e => { p.target_minutes = +e.value; mOut(); });
+    const tOut = () => $("#topicsOut").textContent = `${p.max_topics || 8}本`;
+    bindInput("maxTopics", e => { e.value = p.max_topics || 8; tOut(); }, e => { p.max_topics = +e.value; tOut(); });
+    segBind($("#rateSeg"), p.speech_rate || "+0%", v => p.speech_rate = v);
+
+    const days = $("#daysSeg"); days.textContent = "";
+    for (const [k, label] of DAYS) {
+      const b = el("button", { type: "button", "aria-pressed": String(p.days.includes(k)), text: label, "aria-label": label + "曜日" });
+      b.onclick = () => {
+        const on = !p.days.includes(k);
+        p.days = DAYS.map(d => d[0]).filter(d => d === k ? on : p.days.includes(d));
+        b.setAttribute("aria-pressed", String(on)); setDirty(true);
+      };
+      days.append(b);
+    }
+    bindInput("interestNote", e => e.value = p.interest_note || "", e => p.interest_note = e.value);
+
+    bindInput("wxOn", e => e.checked = w.enabled !== false, e => w.enabled = e.checked, "change");
+    bindInput("wxPlace", e => e.value = w.place || "", e => w.place = e.value);
+    bindInput("wxLat", e => e.value = w.latitude ?? "", e => w.latitude = parseFloat(e.value));
+    bindInput("wxLon", e => e.value = w.longitude ?? "", e => w.longitude = parseFloat(e.value));
+    const hours = Array.from({ length: 25 }, (_, h) => [h, `${h}時`]);
+    const go = w.go_hours || [7, 9], back = w.back_hours || [17, 20];
+    fillSelect($("#goFrom"), hours.slice(0, 24), go[0]); fillSelect($("#goTo"), hours.slice(1), go[1]);
+    fillSelect($("#backFrom"), hours.slice(0, 24), back[0]); fillSelect($("#backTo"), hours.slice(1), back[1]);
+    for (const id of ["goFrom", "goTo", "backFrom", "backTo"]) {
+      $("#" + id).onchange = () => {
+        w.go_hours = [+$("#goFrom").value, +$("#goTo").value];
+        w.back_hours = [+$("#backFrom").value, +$("#backTo").value]; setDirty(true);
+      };
+    }
+    $("#wxHere").onclick = () => {
+      if (!navigator.geolocation) return toast("この端末では位置情報を使えません", true);
+      navigator.geolocation.getCurrentPosition(pos => {
+        w.latitude = +pos.coords.latitude.toFixed(4); w.longitude = +pos.coords.longitude.toFixed(4);
+        $("#wxLat").value = w.latitude; $("#wxLon").value = w.longitude; setDirty(true);
+        toast("緯度・経度を入れました。地点の名前も確認してください");
+      }, () => toast("位置情報を取得できませんでした。ブラウザの許可を確認してください", true), { enableHighAccuracy: false, timeout: 15000 });
+    };
+
+    const [a, b] = p.hosts;
+    bindInput("hostAName", e => e.value = a.name || "", e => a.name = e.value);
+    bindInput("hostBName", e => e.value = b.name || "", e => b.name = e.value);
+    fillSelect($("#hostAVoice"), VOICES, a.voice || VOICES[0][0]);
+    fillSelect($("#hostBVoice"), VOICES, b.voice || VOICES[1][0]);
+    $("#hostAVoice").onchange = e => { a.voice = e.target.value; setDirty(true); };
+    $("#hostBVoice").onchange = e => { b.voice = e.target.value; setDirty(true); };
+
+    bindInput("progTitleIn", e => e.value = p.title || "", e => p.title = e.value);
+    bindInput("progDescIn", e => e.value = p.description || "", e => p.description = e.value);
+    bindInput("keepEp", e => e.value = p.keep_episodes ?? 7, e => p.keep_episodes = parseInt(e.value, 10) || 7);
+    bindInput("lookback", e => e.value = p.lookback_hours ?? 36, e => p.lookback_hours = parseInt(e.value, 10) || 36);
+    bindInput("gmModel", e => e.value = g.model || "gemini-flash-latest", e => g.model = e.value.trim());
+    bindInput("gmSearch", e => e.checked = g.use_search !== false, e => g.use_search = e.checked, "change");
+  }
+
+  function renderGenres() {
+    const list = $("#genreList"), tpl = $("#genreTpl"), genres = state.cfg.genres;
+    list.textContent = "";
+    if (!genres.length) list.append(el("p", { class: "muted", text: "ジャンルがありません。「ジャンルを追加」から作ってください。" }));
+    genres.forEach((gn, i) => {
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      const paint = () => { node.dataset.p = String(gn.priority || 2); node.classList.toggle("off", gn.enabled === false); };
+      paint();
+      for (const f of node.querySelectorAll("[data-k]")) {
+        const k = f.dataset.k;
+        if (k === "enabled") {
+          f.checked = gn.enabled !== false;
+          f.onchange = () => { gn.enabled = f.checked; paint(); setDirty(true); };
+          continue;
+        }
+        const isList = ["keywords", "feeds", "exclude"].includes(k);
+        f.value = isList ? lines(gn[k]).join("\n") : (gn[k] || "");
+        f.oninput = () => { gn[k] = isList ? lines(f.value) : f.value; setDirty(true); };
+      }
+      segBind(node.querySelector("[data-role=priority]"), gn.priority || 2, v => { gn.priority = +v; paint(); });
+      node.querySelector("[data-act=up]").disabled = i === 0;
+      node.querySelector("[data-act=down]").disabled = i === genres.length - 1;
+      node.querySelector("[data-act=up]").onclick = () => move(i, -1);
+      node.querySelector("[data-act=down]").onclick = () => move(i, 1);
+      node.querySelector("[data-act=del]").onclick = () => {
+        if (!confirm(`「${gn.name || "このジャンル"}」を削除しますか？`)) return;
+        genres.splice(i, 1); renderGenres(); setDirty(true);
+      };
+      list.append(node);
+    });
+  }
+  function move(i, d) {
+    const g = state.cfg.genres, j = i + d;
+    if (j < 0 || j >= g.length) return;
+    [g[i], g[j]] = [g[j], g[i]]; renderGenres(); setDirty(true);
+  }
+  $("#addGenre").onclick = () => {
+    state.cfg.genres.push({ name: "", enabled: true, priority: 2, keywords: [], feeds: [], exclude: [], note: "" });
+    renderGenres(); setDirty(true);
+    const last = $("#genreList").lastElementChild; last.scrollIntoView({ block: "center" }); last.querySelector("[data-k=name]").focus();
+  };
+
+  function validate() {
+    const c = state.cfg;
+    c.genres = c.genres.filter(g => (g.name || "").trim() || lines(g.keywords).length || lines(g.feeds).length);
+    for (const g of c.genres) {
+      g.name = (g.name || "").trim() || "名前なし";
+      for (const k of ["keywords", "feeds", "exclude"]) g[k] = lines(g[k]);
+    }
+    if (!c.genres.some(g => g.enabled !== false && (g.keywords.length || g.feeds.length)))
+      return "放送するジャンルに、キーワードかRSSを1つ以上入れてください。";
+    const w = c.weather;
+    if (w.enabled !== false && !(isFinite(w.latitude) && isFinite(w.longitude))) return "天気の緯度・経度を数字で入れてください。";
+    if (!c.program.days.length && !confirm("作成する曜日が1つもありません。このままだと自動では作られませんが、保存しますか？")) return "";
+    return null;
+  }
+  async function save() {
+    if (needToken()) return false;
+    const problem = validate();
+    if (problem !== null) { if (problem) toast(problem, true); return false; }
+    const btns = [$("#saveBtn"), $("#saveRunBtn")]; btns.forEach(b => b.disabled = true);
+    try {
+      const content = JSON.stringify(state.cfg, null, 2) + "\n";
+      const res = await gh(`/repos/${state.repo}/contents/config.json`, { method: "PUT",
+        body: { message: "設定を更新（設定画面から）", content: utf8ToB64(content), sha: state.sha, branch: state.branch } });
+      state.sha = res.content.sha; renderGenres(); setDirty(false);
+      return true;
+    } catch (e) { toast(explain(e), true); return false; }
+    finally { btns.forEach(b => b.disabled = false); }
+  }
+  $("#saveBtn").onclick = async () => { if (await save()) toast("保存しました。次の番組から反映されます"); };
+  $("#saveRunBtn").onclick = async () => { if (await save()) runNow(); };
+
+  // ---------------- 今すぐ作成
+  async function runNow() {
+    if (needToken()) return;
+    try {
+      if (!state.branch) state.branch = (await gh(`/repos/${state.repo}`)).default_branch;
+      const since = Date.now();
+      await gh(`/repos/${state.repo}/actions/workflows/${WF}/dispatches`, { method: "POST", body: { ref: state.branch } });
+      toast("作成を始めました。5分ほどで完成します");
+      watchRun(since);
+    } catch (e) { toast(explain(e), true); }
+  }
+  $("#runNowShow").onclick = runNow;
+  function showRun(text, url, kind) {
+    const box = $("#runStatus"); box.className = "status " + (kind || ""); box.textContent = "";
+    box.append(el("div", { text }));
+    if (url) box.append(el("a", { href: url, target: "_blank", rel: "noopener", text: "実行の記録を開く" }));
+  }
+  async function watchRun(since) {
+    showRun("作成の準備をしています");
+    for (let i = 0; i < 90; i++) {
+      await sleep(i === 0 ? 5000 : 10000);
+      let run;
+      try {
+        const data = await gh(`/repos/${state.repo}/actions/workflows/${WF}/runs?per_page=5&event=workflow_dispatch`);
+        run = (data.workflow_runs || []).find(r => new Date(r.created_at).getTime() >= since - 90000);
+      } catch { continue; }
+      if (!run) continue;
+      if (run.status !== "completed") { showRun("作成中です（数分かかります）", run.html_url, "warn"); continue; }
+      if (run.conclusion === "success") {
+        showRun("完成しました。サイトへの反映に1分ほどかかります。AntennaPodでは番組リストを下に引っ張って更新してください。", run.html_url, "ok");
+        setTimeout(loadEpisodes, 60000); setTimeout(loadEpisodes, 120000);
+      } else {
+        showRun("作成に失敗しました。実行の記録で原因を確認してください。", run.html_url, "error");
+      }
+      return;
+    }
+  }
+
+  // ---------------- 起動
+  renderConnect();
+  loadEpisodes();
+  showTab(location.hash === "#settings" ? "settings" : "show");
+})();
+</script>
+</body>
+</html>

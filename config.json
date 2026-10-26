@@ -1,0 +1,70 @@
+{
+  "program": {
+    "title": "通勤ラジオ",
+    "description": "毎朝届く、自分専用のニュース番組",
+    "style": "dialogue",
+    "target_minutes": 10,
+    "max_topics": 8,
+    "speech_rate": "+10%",
+    "hosts": [
+      { "name": "ナナミ", "voice": "ja-JP-NanamiNeural", "role": "進行役" },
+      { "name": "ケイタ", "voice": "ja-JP-KeitaNeural", "role": "解説役" }
+    ],
+    "interest_note": "朝の運転中に聞き流すので、明るく分かりやすく。事件・事故は交通に関係するものだけ短めに。",
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "keep_episodes": 7,
+    "lookback_hours": 36
+  },
+  "genres": [
+    {
+      "name": "ベガルタ仙台",
+      "enabled": true,
+      "priority": 3,
+      "keywords": ["ベガルタ仙台"],
+      "feeds": [],
+      "exclude": [],
+      "note": "試合結果・次の試合・選手の話題を優先"
+    },
+    {
+      "name": "製造業・FA・ロボット",
+      "enabled": true,
+      "priority": 2,
+      "keywords": ["製造業 自動化", "産業用ロボット", "工場 生産性向上"],
+      "feeds": [],
+      "exclude": ["求人", "転職"],
+      "note": "現場の自動化や改善に役立つ技術・事例を優先"
+    },
+    {
+      "name": "AI・IT",
+      "enabled": true,
+      "priority": 2,
+      "keywords": ["生成AI", "Python プログラミング"],
+      "feeds": [],
+      "exclude": [],
+      "note": "仕事で使えそうな新しいサービスや機能を優先"
+    },
+    {
+      "name": "仙台・宮城",
+      "enabled": true,
+      "priority": 1,
+      "keywords": ["仙台市", "宮城県"],
+      "feeds": [],
+      "exclude": [],
+      "note": "交通・イベント・地域の出来事を中心に"
+    }
+  ],
+  "weather": {
+    "enabled": true,
+    "place": "仙台市",
+    "latitude": 38.2682,
+    "longitude": 140.8694,
+    "go_hours": [7, 9],
+    "back_hours": [17, 20]
+  },
+  "gemini": {
+    "model": "gemini-flash-latest",
+    "use_search": true,
+    "temperature": 0.7
+  },
+  "site_base_url": ""
+}
