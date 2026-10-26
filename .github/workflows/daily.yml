@@ -1,0 +1,67 @@
+name: 通勤ラジオを作成
+
+on:
+  schedule:
+    # 毎日 5:07（日本時間）に起動します。UTCで書くので「20:07 UTC = 翌5:07 JST」。
+    # 番組を作る曜日は設定画面（config.json の days）で選べます。時刻を変えたいときはこの行を編集。
+    - cron: "7 20 * * *"
+  workflow_dispatch: # 手動実行（Actions画面の Run workflow / 設定画面の「今すぐ作成」）
+
+permissions:
+  contents: write # gh-pages ブランチへ番組を公開するため
+  actions: write # 定期実行が自動停止されないようにするため
+
+concurrency:
+  group: commute-radio
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: ライブラリをインストール
+        run: pip install -r requirements.txt
+
+      - name: 公開中のサイトを取得
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git clone --quiet --depth 1 --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site; then
+            rm -rf site/.git
+          else
+            echo "gh-pages ブランチがまだ無いので新しく作ります"
+            mkdir -p site
+          fi
+
+      - name: 番組を作成
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+        run: python commute_radio.py --site-dir site
+
+      - name: サイトを公開（gh-pages）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd site
+          git init --quiet -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit --quiet -m "番組を更新 $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M')"
+          # 履歴を残さず最新の状態だけを置く（古い音声でリポジトリが膨らまないように）
+          git push --quiet --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+
+      - name: 定期実行の自動停止を防ぐ
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/daily.yml/enable" --silent || true
