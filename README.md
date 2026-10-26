@@ -20,7 +20,8 @@ GitHub Actions が毎朝自動で番組を作り、Android の AntennaPod が自
 |---|---|
 | GitHub（公開リポジトリ・Actions・Pages） | 無料 |
 | Gemini API | 無料枠で動きます（1回の作成で2回ほど呼び出し） |
-| edge-tts（Microsoft Edge の読み上げ音声）、Open-Meteo（天気） | 無料・キー不要 |
+| Gemini の音声合成（自然な声） | 無料枠で動きます（1回の番組で3回ほど呼び出し） |
+| edge-tts（予備の読み上げ音声）、Open-Meteo（天気） | 無料・キー不要 |
 | AntennaPod | 無料 |
 
 Gemini の無料枠では、送った内容が Google のサービス改善に使われることがあります。送るのは公開ニュースの見出しと設定内容だけです。
@@ -112,6 +113,9 @@ PC のブラウザで進めるのがおすすめです。
 | `program.days` | 作成する曜日（`mon`〜`sun`） |
 | `program.interest_note` | 話題の選び方・話し方の希望（自由文） |
 | `program.hosts` | 出演者の名前と声（`ja-JP-NanamiNeural` 女性／`ja-JP-KeitaNeural` 男性） |
+| `tts.engine` | `gemini`（自然なAI音声・既定）／`edge`（軽い機械音声）。Gemini が使えない日は自動で edge になります |
+| `program.hosts[].gemini_voice` | 自然な声のときの声（Aoede、Charon など Gemini の声の名前） |
+| `tts.direction` | 自然な声の話し方の演出（例: ゆったり落ち着いて） |
 | `program.keep_episodes` | 残しておく回数 |
 | `program.lookback_hours` | 何時間前までのニュースを対象にするか |
 | `weather` | 地点名・緯度・経度、行き／帰りの時間帯（`[7, 9]` は7時〜9時） |

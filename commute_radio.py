@@ -50,9 +50,18 @@ FALLBACK_MODEL = "gemini-flash-lite-latest"
 PRIORITY_JA = {1: "低", 2: "中", 3: "高"}
 
 DEFAULT_HOSTS = [
-    {"name": "ナナミ", "voice": "ja-JP-NanamiNeural", "role": "進行役"},
-    {"name": "ケイタ", "voice": "ja-JP-KeitaNeural", "role": "解説役"},
+    {"name": "ナナミ", "voice": "ja-JP-NanamiNeural", "gemini_voice": "Aoede", "role": "進行役"},
+    {"name": "ケイタ", "voice": "ja-JP-KeitaNeural", "gemini_voice": "Charon", "role": "解説役"},
 ]
+# Gemini TTS の声（名前はGoogleの公式一覧より）
+GEMINI_VOICES = [
+    "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe", "Autonoe",
+    "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia",
+    "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix",
+    "Sadachbia", "Sadaltager", "Sulafat",
+]
+GEMINI_TTS_FALLBACKS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"]
+TTS_CHUNK_CHARS = 1200  # 1回の音声合成に渡す台本の文字数の目安（約3分）
 
 DEFAULT_CONFIG: dict = {
     "program": {
@@ -78,6 +87,8 @@ DEFAULT_CONFIG: dict = {
         "back_hours": [17, 20],
     },
     "gemini": {"model": "gemini-flash-latest", "use_search": True, "temperature": 0.7},
+    # engine: "gemini" = 自然な声（Gemini TTS）/ "edge" = 軽い機械音声（Microsoft Edge）
+    "tts": {"engine": "gemini", "model": "gemini-3.1-flash-tts-preview", "direction": ""},
     "site_base_url": "",
 }
 
@@ -240,6 +251,13 @@ def load_config(path: Path) -> dict:
     g["model"] = str(g.get("model") or "gemini-flash-latest").strip()
     g["use_search"] = g.get("use_search", True) is not False
     g["temperature"] = clamp(num(g.get("temperature"), 0.7), 0.0, 2.0)
+    t = cfg["tts"]
+    t["engine"] = "edge" if t.get("engine") == "edge" else "gemini"
+    t["model"] = str(t.get("model") or GEMINI_TTS_FALLBACKS[0]).strip()
+    t["direction"] = str(t.get("direction") or "").strip()
+    for i, h in enumerate(p["hosts"]):
+        if h.get("gemini_voice") not in GEMINI_VOICES:
+            h["gemini_voice"] = DEFAULT_HOSTS[i]["gemini_voice"]
     return cfg
 
 
@@ -814,8 +832,139 @@ async def _tts_all(lines: list[tuple[int, str]], cfg: dict) -> list[bytes | None
     return await asyncio.gather(*(one(i, s, t) for i, (s, t) in enumerate(lines)))
 
 
-def synthesize(lines: list[tuple[int, str]], cfg: dict) -> tuple[bytes, float]:
-    log(f"音声化: {len(lines)}行")
+# ---- Gemini TTS（自然な声）
+def _rate_factor(rate: str) -> float:
+    try:
+        return clamp(1 + int(rate.rstrip("%")) / 100, 0.8, 1.3)
+    except ValueError:
+        return 1.0
+
+
+def _pcm_from_response(data: bytes) -> bytes:
+    """Gemini の音声データ（WAV か 生のPCM）から 24kHz・モノラル・16bit のPCMを取り出す"""
+    if data[:4] == b"RIFF":
+        i = 12
+        while i + 8 <= len(data):
+            cid, size = data[i:i + 4], int.from_bytes(data[i + 4:i + 8], "little")
+            if cid == b"data":
+                return data[i + 8:i + 8 + size]
+            i += 8 + size + (size & 1)
+        raise RuntimeError("WAVの中に音声データがありません")
+    return data
+
+
+def _chunks(lines: list[tuple[int, str]], limit: int = TTS_CHUNK_CHARS) -> list[list[tuple[int, str]]]:
+    out, cur, n = [], [], 0
+    for ln in lines:
+        if cur and n + len(ln[1]) > limit:
+            out.append(cur)
+            cur, n = [], 0
+        cur.append(ln)
+        n += len(ln[1])
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _direction(cfg: dict) -> str:
+    p, t = cfg["program"], cfg["tts"]
+    a, b = p["hosts"]
+    if p["style"] == "dialogue":
+        who = (f"Host1（{a['name']}）は{a.get('role') or '進行役'}で、明るく親しみやすい話し方。"
+               f"Host2（{b['name']}）は{b.get('role') or '解説役'}で、落ち着いた聞き取りやすい話し方。"
+               "2人は気心の知れた仲で、相手の話に自然に反応しながら会話する。")
+    else:
+        who = f"Host1（{a['name']}）は1人で番組を進める、明るく聞き取りやすいパーソナリティ。"
+    extra = f"演出の希望: {t['direction']}\n" if t["direction"] else ""
+    return ("朝の通勤時間に車で聞く、日本語のラジオ番組です。"
+            "原稿を読み上げる調子ではなく、生放送のラジオのように自然な抑揚と間で話してください。"
+            f"{who}\n{extra}以下の台本を、そのとおりに話してください。\n\n")
+
+
+def _gemini_tts_chunk(client, cfg: dict, chunk: list[tuple[int, str]], model: str) -> bytes:
+    from google.genai import types
+
+    p = cfg["program"]
+    hosts = p["hosts"]
+    if p["style"] == "dialogue":
+        script = "\n".join(f"Host{spk + 1}: {text}" for spk, text in chunk)
+        speech = types.SpeechConfig(multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+            speaker_voice_configs=[
+                types.SpeakerVoiceConfig(speaker=f"Host{i + 1}", voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=hosts[i]["gemini_voice"])))
+                for i in range(2)]))
+    else:
+        script = "\n".join(text for _, text in chunk)
+        speech = types.SpeechConfig(voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=hosts[0]["gemini_voice"])))
+    resp = client.models.generate_content(
+        model=model, contents=_direction(cfg) + script,
+        config=types.GenerateContentConfig(response_modalities=["AUDIO"], speech_config=speech))
+    for part in resp.candidates[0].content.parts:
+        if part.inline_data and part.inline_data.data:
+            return _pcm_from_response(part.inline_data.data)
+    raise RuntimeError("音声が返ってきませんでした")
+
+
+def synthesize_gemini(client, lines: list[tuple[int, str]], cfg: dict) -> tuple[bytes, float]:
+    chunks = _chunks(lines)
+    models = [cfg["tts"]["model"]] + [m for m in GEMINI_TTS_FALLBACKS if m != cfg["tts"]["model"]]
+    log(f"音声化（Gemini・自然な声）: {len(lines)}行を{len(chunks)}回に分けて作成")
+    pcm = bytearray()
+    silence = lambda ms: bytes(int(24000 * ms / 1000) * 2)  # 24kHz・16bit の無音
+    pcm += silence(LEAD_IN_MS)
+    for ci, chunk in enumerate(chunks):
+        last: Exception | None = None
+        for model in list(models):
+            for attempt in range(3):
+                try:
+                    pcm += _gemini_tts_chunk(client, cfg, chunk, model)
+                    pcm += silence(500)
+                    last = None
+                    break
+                except Exception as e:  # noqa: BLE001
+                    last = e
+                    msg = str(e)
+                    log(f"Gemini TTS エラー（{model}・{ci + 1}/{len(chunks)}・{attempt + 1}回目）: {msg[:200]}")
+                    if any(s in msg for s in ("NOT_FOUND", "INVALID_ARGUMENT", " 404", " 400", "PERMISSION_DENIED")):
+                        break
+                    time.sleep(30 if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) else 8)
+            if last is None:
+                if model != models[0]:
+                    models.remove(model)
+                    models.insert(0, model)  # 使えたモデルを次から先に使う
+                break
+            if model in models and len(models) > 1:
+                models.remove(model)
+        if last is not None:
+            raise RuntimeError(f"Gemini で音声を作れませんでした: {last}")
+        if ci + 1 < len(chunks):
+            time.sleep(6)  # 無料枠の回数制限に引っかかりにくくする
+    pcm += silence(TAIL_MS)
+    factor = _rate_factor(cfg["program"]["speech_rate"])
+    import subprocess
+
+    af = ["-af", f"atempo={factor:.2f}"] if abs(factor - 1) > 0.01 else []
+    mp3 = subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0", *af,
+         "-c:a", "libmp3lame", "-b:a", "64k", "-f", "mp3", "pipe:1"],
+        input=bytes(pcm), capture_output=True, check=True).stdout
+    frames = clean_mp3(mp3)
+    return frames, mp3_duration(frames)
+
+
+def synthesize(lines: list[tuple[int, str]], cfg: dict, client=None) -> tuple[bytes, float]:
+    if cfg["tts"]["engine"] == "gemini":
+        if client is None:
+            warn("Gemini が使えないため、軽い機械音声（Edge）で作成しました")
+        elif shutil.which("ffmpeg") is None:
+            warn("ffmpeg が見つからないため、軽い機械音声（Edge）で作成しました")
+        else:
+            try:
+                return synthesize_gemini(client, lines, cfg)
+            except Exception as e:  # noqa: BLE001
+                warn(f"自然な声（Gemini）で作れなかったため、軽い機械音声（Edge）で作成しました: {str(e)[:200]}")
+    log(f"音声化（Edge）: {len(lines)}行")
     clips = asyncio.run(_tts_all(lines, cfg))
     ok = [c for c in clips if c]
     if len(ok) < max(1, int(len(lines) * 0.7)):
@@ -1029,7 +1178,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{p['hosts'][spk]['name']}: {t}")
         return 0
 
-    audio, duration = synthesize(lines, cfg)
+    audio, duration = synthesize(lines, cfg, client)
     ep_id = now.strftime("%Y%m%d-%H%M")
     ids = {e["id"] for e in state["episodes"]}
     k = 2

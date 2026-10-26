@@ -270,8 +270,14 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         <small class="muted">この時間帯の降水確率と、雪・霧・凍結の注意を伝えます。</small>
       </div>
 
-      <h2>出演者</h2>
+      <h2>声と出演者</h2>
       <div class="panel">
+        <div class="field" style="margin-top:0"><span>声の種類</span>
+          <div class="seg" id="engineSeg">
+            <button type="button" data-v="gemini">自然な声（AI）</button>
+            <button type="button" data-v="edge">軽い機械音声</button>
+          </div>
+          <small>自然な声は Gemini で作ります。使えない日は自動で機械音声になります。</small></div>
         <div class="two">
           <label class="field" style="margin-top:0"><span>進行役の名前</span><input type="text" id="hostAName"></label>
           <label class="field" style="margin-top:0"><span>声</span><select id="hostAVoice"></select></label>
@@ -280,6 +286,9 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
           <label class="field"><span>解説役の名前</span><input type="text" id="hostBName"></label>
           <label class="field"><span>声</span><select id="hostBVoice"></select></label>
         </div>
+        <label class="field" id="directionRow"><span>話し方の演出（自然な声のとき）</span>
+          <input type="text" id="ttsDirection" placeholder="例: 落ち着いた朝の番組らしく、ゆったりと">
+          <small>空欄なら「生放送のラジオのように自然に」で話します。</small></label>
       </div>
 
       <h2>詳しい設定</h2>
@@ -348,6 +357,15 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
   };
   const DAYS = [["mon","月"],["tue","火"],["wed","水"],["thu","木"],["fri","金"],["sat","土"],["sun","日"]];
   const VOICES = [["ja-JP-NanamiNeural","ナナミ（女性）"],["ja-JP-KeitaNeural","ケイタ（男性）"]];
+  const GVOICES = [["Aoede","女性・さわやか"],["Kore","女性・しっかり"],["Leda","女性・若々しい"],["Zephyr","女性・明るい"],
+    ["Callirrhoe","女性・おおらか"],["Autonoe","女性・明るい"],["Despina","女性・なめらか"],["Erinome","女性・はっきり"],
+    ["Laomedeia","女性・快活"],["Achernar","女性・やわらか"],["Gacrux","女性・大人っぽい"],["Pulcherrima","女性・積極的"],
+    ["Vindemiatrix","女性・やさしい"],["Sulafat","女性・あたたかい"],
+    ["Charon","男性・わかりやすい"],["Puck","男性・元気"],["Orus","男性・しっかり"],["Fenrir","男性・興奮気味"],
+    ["Iapetus","男性・はっきり"],["Umbriel","男性・おおらか"],["Algieba","男性・なめらか"],["Enceladus","男性・息まじり"],
+    ["Algenib","男性・しゃがれ声"],["Rasalgethi","男性・知的"],["Alnilam","男性・力強い"],["Schedar","男性・落ち着き"],
+    ["Achird","男性・親しみやすい"],["Zubenelgenubi","男性・カジュアル"],["Sadachbia","男性・いきいき"],["Sadaltager","男性・物知り"]]
+    .map(([v, d]) => [v, `${v}（${d}）`]);
   const WF = "daily.yml";
 
   function guessRepo() {
@@ -664,10 +682,19 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     const [a, b] = p.hosts;
     bindInput("hostAName", e => e.value = a.name || "", e => a.name = e.value);
     bindInput("hostBName", e => e.value = b.name || "", e => b.name = e.value);
-    fillSelect($("#hostAVoice"), VOICES, a.voice || VOICES[0][0]);
-    fillSelect($("#hostBVoice"), VOICES, b.voice || VOICES[1][0]);
-    $("#hostAVoice").onchange = e => { a.voice = e.target.value; setDirty(true); };
-    $("#hostBVoice").onchange = e => { b.voice = e.target.value; setDirty(true); };
+    c.tts = c.tts || {};
+    const t = c.tts; if (t.engine !== "edge") t.engine = "gemini";
+    const paintVoices = () => {
+      const g = t.engine === "gemini";
+      fillSelect($("#hostAVoice"), g ? GVOICES : VOICES, g ? (a.gemini_voice || "Aoede") : (a.voice || VOICES[0][0]));
+      fillSelect($("#hostBVoice"), g ? GVOICES : VOICES, g ? (b.gemini_voice || "Charon") : (b.voice || VOICES[1][0]));
+      $("#directionRow").classList.toggle("hidden", !g);
+    };
+    segBind($("#engineSeg"), t.engine, v => { t.engine = v; paintVoices(); });
+    paintVoices();
+    $("#hostAVoice").onchange = e => { if (t.engine === "gemini") a.gemini_voice = e.target.value; else a.voice = e.target.value; setDirty(true); };
+    $("#hostBVoice").onchange = e => { if (t.engine === "gemini") b.gemini_voice = e.target.value; else b.voice = e.target.value; setDirty(true); };
+    bindInput("ttsDirection", e => e.value = t.direction || "", e => t.direction = e.value);
 
     bindInput("progTitleIn", e => e.value = p.title || "", e => p.title = e.value);
     bindInput("progDescIn", e => e.value = p.description || "", e => p.description = e.value);
