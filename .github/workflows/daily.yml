@@ -30,6 +30,9 @@ jobs:
       - name: ライブラリをインストール
         run: pip install -r requirements.txt
 
+      - name: 音声変換ツール（ffmpeg）を用意
+        run: command -v ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+
       - name: 公開中のサイトを取得
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
