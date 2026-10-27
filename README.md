@@ -106,6 +106,7 @@ PC のブラウザで進めるのがおすすめです。
 | `genres[].priority` | 重要度 1〜3（高いほど話題が多く、詳しくなる） |
 | `genres[].note` | そのジャンルへの要望（例: 試合結果は詳しく） |
 | `genres[].enabled` | false にすると放送しない |
+| `genres[].strict` | true（既定）なら、見出しか概要にキーワードが入った記事だけ使う。無関係な記事が混ざるのを防ぐ |
 | `program.style` | `dialogue`（2人の掛け合い）／`single`（1人） |
 | `program.target_minutes` | 番組の長さの目安（分） |
 | `program.max_topics` | 1回の話題の最大数 |

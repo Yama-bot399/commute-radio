@@ -233,6 +233,8 @@ def load_config(path: Path) -> dict:
                 "feeds": to_list(g.get("feeds")),
                 "exclude": to_list(g.get("exclude")),
                 "note": str(g.get("note") or "").strip(),
+                # true: 見出し（か概要）にキーワードが入っている記事だけ使う
+                "strict": g.get("strict", True) is not False,
             }
         )
     cfg["genres"] = genres
@@ -262,8 +264,33 @@ def load_config(path: Path) -> dict:
 
 
 # ---------------------------------------------------------------- ニュース収集
+def _terms(keyword: str) -> list[str]:
+    """キーワードを検索語に分ける（"…" はひとかたまり、-語 と OR は照合に使わない）"""
+    terms = re.findall(r'"([^"]+)"|(\S+)', unicodedata.normalize("NFKC", keyword))
+    out = []
+    for quoted, word in terms:
+        t = quoted or word
+        if not t or t.upper() == "OR" or t.startswith("-"):
+            continue
+        out.append(t)
+    return out
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text).lower())
+
+
+def matches_keyword(text: str, keyword: str) -> bool:
+    """キーワードの語がすべて text に含まれるか（大文字小文字・全角半角・空白の違いは無視）"""
+    t = _squash(text)
+    terms = _terms(keyword)
+    return bool(terms) and all(_squash(w) in t for w in terms)
+
+
 def google_news_url(query: str, lookback_hours: float) -> str:
     days = max(1, int(-(-lookback_hours // 24)))
+    if '"' not in query and " " not in query.strip():
+        query = f'"{query.strip()}"'  # 1語だけのキーワードは完全一致で検索（あいまい検索で無関係な記事が混ざるのを防ぐ）
     q = f"{query} when:{days}d"
     return "https://news.google.com/rss/search?" + urllib.parse.urlencode(
         {"q": q, "hl": "ja", "gl": "JP", "ceid": "JP:ja"}
@@ -320,22 +347,32 @@ def collect_news(cfg: dict, now: dt.datetime, recent_titles: list[str]) -> list[
     if not enabled:
         warn("有効なジャンルがありません（設定画面でジャンルをONにしてください）")
     for gi, genre in enumerate(enabled):
-        sources = [(google_news_url(k, p["lookback_hours"]), True) for k in genre["keywords"]]
-        sources += [(u, False) for u in genre["feeds"]]
+        sources = [(google_news_url(k, p["lookback_hours"]), True, k) for k in genre["keywords"]]
+        sources += [(u, False, None) for u in genre["feeds"]]
         if not sources:
             warn(f"「{genre['name']}」にキーワードもRSSもありません")
             continue
         raw: list[dict] = []
-        for url, is_google in sources:
+        dropped = 0
+        for url, is_google, kw in sources:
             try:
                 got = parse_feed(http_get(url), is_google)
             except Exception as e:  # noqa: BLE001
                 warn(f"「{genre['name']}」の取得に失敗: {url[:80]} ({e})")
                 continue
             got = [it for it in got if not it["published"] or it["published"] >= since]
+            if genre["strict"]:
+                # 見出し・概要にキーワードが無い記事は、ジャンルと無関係とみなして外す
+                kws = [kw] if kw else genre["keywords"]
+                if kws:
+                    keep = [it for it in got if any(matches_keyword(it["title"] + " " + it["summary"], k) for k in kws)]
+                    dropped += len(got) - len(keep)
+                    got = keep
             got.sort(key=lambda it: it["published"] or since, reverse=True)
             raw += got[:30]
         raw.sort(key=lambda it: it["published"] or since, reverse=True)
+        if dropped:
+            log(f"「{genre['name']}」: キーワードを含まない{dropped}件を除外")
         fresh = []
         for it in raw:
             if any(w in it["title"] for w in genre["exclude"]):
@@ -540,6 +577,7 @@ def select_topics(client, cfg: dict, items: list[dict]) -> tuple[list[dict], boo
 
 # 選び方
 - 重要度「高」のジャンルを多めに、「低」は少なめに。候補があるジャンルからは原則1本以上選ぶ
+- 候補は「ジャンル」の話題として集めたものだが、検索の都合で無関係な記事も混ざる。見出しがそのジャンルの話題だとはっきり分かるものだけ選び、少しでも怪しいものは選ばない（例: ジャンル「ベガルタ仙台」に将棋や他チームだけの話題）。合う候補が無いジャンルからは選ばなくてよい
 - 同じ出来事を扱う候補は1本だけ選ぶ
 - 新しく、具体的な事実（結果・数字・発表内容）があるものを優先する
 - 広告・まとめ記事・中身のない見出しは選ばない
@@ -664,7 +702,8 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
 {p['interest_note'] or '（特になし）'}
 
 # 守ること
-- 内容は下のニュース情報と天気情報だけを使い、分からないことを推測で補わない
+- 内容は下のニュース情報と天気情報だけを使い、分からないことを推測で補わない。下に無い話題を検索で見つけて付け足さない
+- 見出しの内容がそのジャンルと関係ないと分かったものは、その話題ごと飛ばす
 {search_rule}- 記事の文章をそのまま読まず、話し言葉で短く言い換える。媒体名は「河北新報によると」のように必要なときだけ
 - 耳で聞いて分かる文章にする。1回の発言は1〜3文、1文は短く。URL・記号・括弧・箇条書き・絵文字は使わない
 - 数字は聞き取りやすく言う（例: 2-1 は「2対1」、10/26 は「10月26日」）

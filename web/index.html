@@ -336,6 +336,8 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
       <label class="field"><span>RSSのURL</span><textarea data-k="feeds" placeholder="https://…（1行に1つ）"></textarea>
         <small>よく読むサイトのRSSがあれば追加できます。</small></label>
       <label class="field"><span>除外ワード</span><textarea data-k="exclude" placeholder="見出しにこの言葉があれば外す（1行に1つ）"></textarea></label>
+      <label class="switch" style="margin-top:14px"><input type="checkbox" data-k="strict"> 見出しにキーワードが入った記事だけ使う</label>
+      <small class="muted" style="display:block">オンがおすすめ。関係ない記事が混ざるのを防ぎます。オフにすると記事は増えますが、無関係な話題が入りやすくなります。</small>
       <label class="field"><span>このジャンルへの要望</span><input type="text" data-k="note" placeholder="例: 試合結果は詳しく"></label>
     </details>
     <div class="genre-tools">
@@ -714,9 +716,9 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
       paint();
       for (const f of node.querySelectorAll("[data-k]")) {
         const k = f.dataset.k;
-        if (k === "enabled") {
-          f.checked = gn.enabled !== false;
-          f.onchange = () => { gn.enabled = f.checked; paint(); setDirty(true); };
+        if (k === "enabled" || k === "strict") {
+          f.checked = gn[k] !== false;
+          f.onchange = () => { gn[k] = f.checked; paint(); setDirty(true); };
           continue;
         }
         const isList = ["keywords", "feeds", "exclude"].includes(k);
@@ -741,7 +743,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     [g[i], g[j]] = [g[j], g[i]]; renderGenres(); setDirty(true);
   }
   $("#addGenre").onclick = () => {
-    state.cfg.genres.push({ name: "", enabled: true, priority: 2, keywords: [], feeds: [], exclude: [], note: "" });
+    state.cfg.genres.push({ name: "", enabled: true, priority: 2, keywords: [], feeds: [], exclude: [], note: "", strict: true });
     renderGenres(); setDirty(true);
     const last = $("#genreList").lastElementChild; last.scrollIntoView({ block: "center" }); last.querySelector("[data-k=name]").focus();
   };
