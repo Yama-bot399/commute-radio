@@ -3,8 +3,8 @@
     "title": "通勤ラジオ",
     "description": "毎朝届く、自分専用のニュース番組",
     "style": "dialogue",
-    "target_minutes": 20,
-    "max_topics": 8,
+    "target_minutes": 24,
+    "max_topics": 10,
     "speech_rate": "+0%",
     "hosts": [
       {
@@ -87,12 +87,14 @@
       "enabled": true,
       "priority": 2,
       "keywords": [
-        "おすすめ",
-        "ジャンル別"
+        "おすすめ"
       ],
       "feeds": [],
-      "exclude": [],
-      "note": ""
+      "exclude": [
+        "アニメ",
+        "漫画"
+      ],
+      "note": "過去のものでもいいので評価の高いものを一冊紹介して下さい"
     },
     {
       "name": "猫",
@@ -104,7 +106,21 @@
       ],
       "feeds": [],
       "exclude": [],
-      "note": ""
+      "note": "猫に関する豆知識や面白い話"
+    },
+    {
+      "name": "宮城のおいしい店",
+      "enabled": true,
+      "priority": 2,
+      "keywords": [
+        "ラーメン",
+        "そば",
+        "パスタ",
+        "海鮮"
+      ],
+      "feeds": [],
+      "exclude": [],
+      "note": "宮城県内にある評価の高い食事の店を紹介して下さい"
     }
   ],
   "weather": {
@@ -126,5 +142,8 @@
     "use_search": true,
     "temperature": 0.7
   },
-  "site_base_url": ""
+  "site_base_url": "",
+  "tts": {
+    "engine": "gemini"
+  }
 }
