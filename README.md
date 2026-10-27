@@ -112,6 +112,9 @@ PC のブラウザで進めるのがおすすめです。
 | `program.max_topics` | 1回の話題の最大数 |
 | `program.speech_rate` | 話す速さ（`-10%`〜`+20%` など） |
 | `program.days` | 作成する曜日（`mon`〜`sun`） |
+| `program.loudness` | 番組の音量（-16=標準 / -14=大きめ / -12=とても大きい） |
+| `program.bgm` | BGM（`none` / `morning` 朝のさわやか / `lofi` ローファイ / `ambient` アンビエント / `news` ニュース風 / `custom` = bgm/custom.mp3 に置いた自分の曲） |
+| `program.bgm_volume` | BGMの大きさ（`small` / `medium` / `large`）。話している間は自動で小さくなります |
 | `program.interest_note` | 話題の選び方・話し方の希望（自由文） |
 | `program.hosts` | 出演者の名前と声（`ja-JP-NanamiNeural` 女性／`ja-JP-KeitaNeural` 男性） |
 | `tts.engine` | `gemini`（自然なAI音声・既定）／`edge`（軽い機械音声）。Gemini が使えない日は自動で edge になります |
@@ -159,3 +162,7 @@ python commute_radio.py --dry-run                     # 集めた話題と台本
 python commute_radio.py --site-dir site --force --base-url http://localhost:8000
 python -m http.server 8000 --directory site           # http://localhost:8000 で番組ページを確認
 ```
+
+## BGMについて
+
+bgm フォルダの4曲は、tools/make_bgm.py でこのツール用に一から合成したオリジナル曲です。好きな曲を使いたいときは、利用が許可された曲（フリーBGMなど）を custom.mp3 という名前で bgm フォルダに入れ、設定で「自分の曲」を選びます。

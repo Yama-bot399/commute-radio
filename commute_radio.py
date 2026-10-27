@@ -60,6 +60,8 @@ GEMINI_VOICES = [
     "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix",
     "Sadachbia", "Sadaltager", "Sulafat",
 ]
+BGM_CHOICES = ["none", "morning", "lofi", "ambient", "news", "custom"]
+BGM_GAIN = {"small": 0.45, "medium": 0.7, "large": 1.0}  # 声の後ろで流すときのBGMの大きさ
 GEMINI_TTS_FALLBACKS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"]
 TTS_CHUNK_CHARS = 1200  # 1回の音声合成に渡す台本の文字数の目安（約3分）
 
@@ -71,11 +73,14 @@ DEFAULT_CONFIG: dict = {
         "target_minutes": 10,
         "max_topics": 8,
         "speech_rate": "+10%",
+        "loudness": -14,  # 音量の目安（LUFS）。-16=標準 / -14=大きめ / -12=とても大きい
         "hosts": DEFAULT_HOSTS,
         "interest_note": "",
         "days": ["mon", "tue", "wed", "thu", "fri"],
         "keep_episodes": 7,
         "lookback_hours": 36,
+        "bgm": "morning",  # none / morning / lofi / ambient / news / custom（bgm/custom.mp3）
+        "bgm_volume": "medium",  # small / medium / large
     },
     "genres": [],
     "weather": {
@@ -206,6 +211,7 @@ def load_config(path: Path) -> dict:
     p["lookback_hours"] = clamp(num(p.get("lookback_hours"), 36), 6, 24 * 7)
     if not re.fullmatch(r"[+-]\d{1,3}%", str(p.get("speech_rate", ""))):
         p["speech_rate"] = "+0%"
+    p["loudness"] = clamp(num(p.get("loudness"), -14), -20, -10)
     hosts = [h for h in p.get("hosts") or [] if isinstance(h, dict)]
     for i in range(2):
         base = copy.deepcopy(DEFAULT_HOSTS[i])
@@ -219,6 +225,8 @@ def load_config(path: Path) -> dict:
     p["days"] = [d for d in to_list(p.get("days")) if d in DAY_KEYS]
     p["title"] = str(p.get("title") or "通勤ラジオ").strip()
     p["interest_note"] = str(p.get("interest_note") or "").strip()
+    p["bgm"] = p.get("bgm") if p.get("bgm") in BGM_CHOICES else "none"
+    p["bgm_volume"] = p.get("bgm_volume") if p.get("bgm_volume") in BGM_GAIN else "medium"
 
     genres = []
     for i, g in enumerate(cfg.get("genres") or []):
@@ -992,6 +1000,51 @@ def synthesize_gemini(client, lines: list[tuple[int, str]], cfg: dict) -> tuple[
     return frames, mp3_duration(frames)
 
 
+def post_process(mp3: bytes, cfg: dict) -> tuple[bytes, float]:
+    """音量をそろえ（ラウドネス正規化）、選んだBGMを声の後ろに小さく敷く"""
+    import subprocess
+    import tempfile
+
+    if shutil.which("ffmpeg") is None:
+        warn("ffmpeg が見つからないため、音量の調整とBGMを省きました")
+        return mp3, mp3_duration(mp3)
+    p = cfg["program"]
+    bgm_file = HERE / "bgm" / f"{p['bgm']}.mp3"
+    use_bgm = p["bgm"] != "none"
+    if use_bgm and not bgm_file.exists():
+        warn(f"BGMのファイル bgm/{p['bgm']}.mp3 が見つからないため、BGMなしで作りました")
+        use_bgm = False
+    with tempfile.TemporaryDirectory() as td:
+        src, out = Path(td) / "voice.mp3", Path(td) / "out.mp3"
+        src.write_bytes(mp3)
+        # 声を軽く圧縮して小さい所を持ち上げ、番組全体を設定の音量（loudness）にそろえる
+        voice = ("[0:a]aresample=24000,acompressor=threshold=-24dB:ratio=3:attack=5:release=120:makeup=2,"
+                 f"loudnorm=I={p['loudness']}:TP=-1.5:LRA=7,aresample=24000")
+        if use_bgm:
+            g = BGM_GAIN[p["bgm_volume"]]
+            # 冒頭2.5秒はBGMだけ → 声が入ると自動で小さく（ダッキング）→ 最後はフェードアウト
+            fc = (f"{voice},adelay=2500:all=1,apad=pad_dur=3,asplit=2[v][sc];"
+                  f"[1:a]aresample=24000,volume={g},afade=t=in:d=1.5[b];"
+                  "[b][sc]sidechaincompress=threshold=0.03:ratio=4:attack=40:release=900:makeup=1[bd];"
+                  "[v][bd]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.9[mix]")
+            args = ["-i", str(src), "-stream_loop", "-1", "-i", str(bgm_file)]
+        else:
+            fc = f"{voice},alimiter=limit=0.9[mix]"
+            args = ["-i", str(src)]
+        subprocess.run(["ffmpeg", "-y", "-v", "error", *args, "-filter_complex", fc, "-map", "[mix]",
+                        "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", "64k", str(out)], check=True)
+        data = out.read_bytes()
+        if use_bgm:  # 最後の3秒をフェードアウト
+            dur = mp3_duration(clean_mp3(data))
+            out2 = Path(td) / "out2.mp3"
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out), "-af", f"afade=t=out:st={max(0, dur - 3):.2f}:d=3",
+                            "-c:a", "libmp3lame", "-b:a", "64k", str(out2)], check=True)
+            data = out2.read_bytes()
+    frames = clean_mp3(data)
+    log(f"音量を調整しました（目安 {p['loudness']} LUFS）{'・BGM: ' + p['bgm'] if use_bgm else ''}")
+    return frames, mp3_duration(frames)
+
+
 def synthesize(lines: list[tuple[int, str]], cfg: dict, client=None) -> tuple[bytes, float]:
     if cfg["tts"]["engine"] == "gemini":
         if client is None:
@@ -1096,6 +1149,11 @@ def copy_web_assets(site: Path) -> None:
         for f in web.iterdir():
             if f.is_file():
                 shutil.copy2(f, site / f.name)
+    bgm = HERE / "bgm"
+    if bgm.is_dir():  # 設定画面でBGMを試聴できるように公開する
+        (site / "bgm").mkdir(exist_ok=True)
+        for f in bgm.glob("*.mp3"):
+            shutil.copy2(f, site / "bgm" / f.name)
     (site / ".nojekyll").write_text("", encoding="utf-8")
 
 
@@ -1218,6 +1276,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     audio, duration = synthesize(lines, cfg, client)
+    try:
+        audio, duration = post_process(audio, cfg)
+    except Exception as e:  # noqa: BLE001
+        warn(f"音量の調整・BGMの追加に失敗したため、元の音声のまま公開しました: {str(e)[:200]}")
     ep_id = now.strftime("%Y%m%d-%H%M")
     ids = {e["id"] for e in state["episodes"]}
     k = 2

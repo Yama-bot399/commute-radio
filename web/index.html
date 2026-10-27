@@ -243,6 +243,37 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
             <button type="button" data-v="+10%">やや速い</button>
             <button type="button" data-v="+20%">速い</button>
           </div></div>
+        <div class="field"><span>音量</span>
+          <div class="seg" id="loudSeg">
+            <button type="button" data-v="-16">標準</button>
+            <button type="button" data-v="-14">大きめ</button>
+            <button type="button" data-v="-12">とても大きい</button>
+          </div>
+          <small>番組全体の音量をそろえます。車で小さく感じるときは「とても大きい」に。</small></div>
+        <div class="field"><span>番組の音量</span>
+          <div class="seg" id="loudSeg">
+            <button type="button" data-v="-16">標準</button>
+            <button type="button" data-v="-14">大きめ</button>
+            <button type="button" data-v="-12">とても大きい</button>
+          </div>
+          <small>車の中で小さく感じるときは「とても大きい」にします。</small></div>
+        <div class="field"><span>BGM</span>
+          <div class="two"><select id="bgmSel">
+            <option value="none">なし</option>
+            <option value="morning">朝のさわやか</option>
+            <option value="lofi">ローファイ</option>
+            <option value="ambient">アンビエント（静か）</option>
+            <option value="news">ニュース風</option>
+            <option value="custom">自分の曲（bgm/custom.mp3）</option>
+          </select><button class="btn quiet" id="bgmPlay" type="button">試聴</button></div>
+          <audio id="bgmAudio" preload="none" loop></audio></div>
+        <div class="field" id="bgmVolRow"><span>BGMの大きさ</span>
+          <div class="seg" id="bgmVolSeg">
+            <button type="button" data-v="small">小</button>
+            <button type="button" data-v="medium">中</button>
+            <button type="button" data-v="large">大</button>
+          </div>
+          <small>話している間は自動で小さくなり、番組の最初と最後だけ大きく流れます。</small></div>
         <div class="field"><span>作成する曜日</span>
           <div class="seg days" id="daysSeg"></div>
           <small>毎朝5時ごろに作成します（時刻の変更はREADMEを参照）。</small></div>
@@ -645,7 +676,23 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     const tOut = () => $("#topicsOut").textContent = `${p.max_topics || 8}本`;
     bindInput("maxTopics", e => { e.value = p.max_topics || 8; tOut(); }, e => { p.max_topics = +e.value; tOut(); });
     segBind($("#rateSeg"), p.speech_rate || "+0%", v => p.speech_rate = v);
+    segBind($("#loudSeg"), String(p.loudness ?? -14), v => p.loudness = Number(v));
 
+    if (![-16, -14, -12].includes(Number(p.loudness))) p.loudness = -14;
+    segBind($("#loudSeg"), p.loudness, v => p.loudness = Number(v));
+    p.bgm = p.bgm || "morning"; p.bgm_volume = p.bgm_volume || "medium";
+    const bgmSel = $("#bgmSel"), bgmAudio = $("#bgmAudio"), bgmPlay = $("#bgmPlay");
+    const stopBgm = () => { bgmAudio.pause(); bgmPlay.textContent = "試聴"; };
+    const paintBgm = () => { $("#bgmVolRow").classList.toggle("hidden", p.bgm === "none"); bgmPlay.disabled = p.bgm === "none"; };
+    bgmSel.value = p.bgm; paintBgm();
+    bgmSel.onchange = () => { p.bgm = bgmSel.value; stopBgm(); paintBgm(); setDirty(true); };
+    bgmPlay.onclick = () => {
+      if (!bgmAudio.paused) return stopBgm();
+      bgmAudio.src = `bgm/${p.bgm}.mp3`;
+      bgmAudio.play().then(() => { bgmPlay.textContent = "止める"; })
+        .catch(() => toast(p.bgm === "custom" ? "bgm/custom.mp3 がまだありません。GitHub の bgm フォルダに入れてください" : "試聴できませんでした。番組を1回作ると聞けるようになります", true));
+    };
+    segBind($("#bgmVolSeg"), p.bgm_volume, v => p.bgm_volume = v);
     const days = $("#daysSeg"); days.textContent = "";
     for (const [k, label] of DAYS) {
       const b = el("button", { type: "button", "aria-pressed": String(p.days.includes(k)), text: label, "aria-label": label + "曜日" });
