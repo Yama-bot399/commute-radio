@@ -11,7 +11,7 @@
         "name": "ナナミ",
         "voice": "ja-JP-NanamiNeural",
         "role": "進行役",
-        "gemini_voice": "Achernar"
+        "gemini_voice": "Vindemiatrix"
       },
       {
         "name": "ケイタ",
@@ -148,6 +148,10 @@
   },
   "site_base_url": "",
   "tts": {
-    "engine": "gemini"
+    "engine": "gemini",
+    "sample_request": {
+      "voice": "Vindemiatrix",
+      "at": "2026-10-28T07:47:15.893Z"
+    }
   }
 }
