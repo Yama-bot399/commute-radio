@@ -4,7 +4,7 @@
     "description": "毎朝届く、自分専用のニュース番組",
     "style": "single",
     "target_minutes": 24,
-    "max_topics": 10,
+    "max_topics": 8,
     "speech_rate": "+0%",
     "hosts": [
       {
@@ -19,7 +19,7 @@
         "role": "解説役"
       }
     ],
-    "interest_note": "機械的な淡々としたものではなくフリートーク風にして下さい。notebooklmみたいな感じで。笑いも交えて。",
+    "interest_note": "機械的な淡々としたものではなくフリートーク風にして下さい。notebooklmみたいな感じで。笑いも交えて。ニュースにこだわらず聴き物であればOK。",
     "days": [
       "mon",
       "tue",
