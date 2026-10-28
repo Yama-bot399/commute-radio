@@ -91,7 +91,8 @@
       "enabled": true,
       "priority": 2,
       "keywords": [
-        "おすすめ"
+        "おすすめ",
+        "小説"
       ],
       "feeds": [],
       "exclude": [
@@ -106,7 +107,8 @@
       "priority": 1,
       "keywords": [
         "豆知識",
-        "おすすめグッズ"
+        "おすすめグッズ",
+        "猫"
       ],
       "feeds": [],
       "exclude": [],
