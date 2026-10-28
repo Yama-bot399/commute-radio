@@ -4,7 +4,7 @@
     "description": "毎朝届く、自分専用のニュース番組",
     "style": "single",
     "target_minutes": 24,
-    "max_topics": 8,
+    "max_topics": 15,
     "speech_rate": "+0%",
     "hosts": [
       {
