@@ -42,7 +42,9 @@ HERE = Path(__file__).resolve().parent
 USER_AGENT = "Mozilla/5.0 (compatible; commute-radio/1.0)"
 DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 WEEKDAY_JA = "月火水木金土日"
-CHARS_PER_MINUTE = 300  # 標準の速さで1分に読める文字数の目安
+CHARS_PER_MINUTE = {"gemini": 330, "edge": 300}  # 1分に話す文字数の初期値（実際の回の長さから毎回補正する）
+VOICE_SAMPLE_TEXT = "おはようございます。通勤ラジオです。この声で、毎朝のニュースをお届けします。今日も安全運転でいってらっしゃい。"
+VOICE_SAMPLES_PER_RUN = 0  # 番組作成のついでに作る「選んでいない声」のサンプル数（番組用の無料枠を守るため0）
 LINE_GAP_MS = 300  # 発言と発言のあいだの無音
 LEAD_IN_MS = 700  # 冒頭の無音（カーオーディオで頭が切れるのを防ぐ）
 TAIL_MS = 1200
@@ -63,7 +65,7 @@ GEMINI_VOICES = [
 BGM_CHOICES = ["none", "morning", "lofi", "ambient", "news", "custom"]
 BGM_GAIN = {"small": 0.45, "medium": 0.7, "large": 1.0}  # 声の後ろで流すときのBGMの大きさ
 GEMINI_TTS_FALLBACKS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"]
-TTS_CHUNK_CHARS = 1200  # 1回の音声合成に渡す台本の文字数の目安（約3分）
+TTS_CHUNK_CHARS = 2400  # 1回の音声合成に渡す台本の文字数の目安（約7分）。無料枠は1日10回ほどなので回数を減らす
 
 DEFAULT_CONFIG: dict = {
     "program": {
@@ -657,11 +659,72 @@ def parse_script(text: str, style: str, names: tuple[str, str] = ("", "")) -> li
     return lines
 
 
-def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, now: dt.datetime) -> tuple[list, bool]:
+def estimate_cpm(state: dict, cfg: dict) -> float:
+    """1分あたりに話す文字数。過去の回の「台本の文字数 ÷ 実際の長さ」から求める（話す速さの設定も考慮）"""
+    engine = cfg["tts"]["engine"]
+    factor = _rate_factor(cfg["program"]["speech_rate"])
+    vals = []
+    for e in state["episodes"][:8]:
+        if e.get("engine") == engine and e.get("chars") and e.get("speech_minutes", 0) > 1:
+            vals.append(e["chars"] / e["speech_minutes"] / e.get("rate_factor", 1.0))
+        if len(vals) >= 3:
+            break
+    base = sum(vals) / len(vals) if vals else CHARS_PER_MINUTE[engine] / (1.0 if engine == "gemini" else 1.1)
+    return clamp(base * factor, 200, 500)
+
+
+def _budget_text(topics: list[dict], cfg: dict, body: int) -> str:
+    weights = []
+    for t in topics:
+        g = next((g for g in cfg["genres"] if g["name"] == t["genre"]), None)
+        weights.append({1: 0.7, 2: 1.0, 3: 1.5}[g["priority"] if g else 2])
+    total = sum(weights) or 1
+    per = [int(body * w / total) for w in weights]
+    return "\n".join(f"- {t['title'][:40]}: 約{n}文字" for t, n in zip(topics, per))
+
+
+def _expand_script(client, cfg: dict, lines: list, target: int, fmt: str, names: tuple) -> list:
+    """台本が目標より短いときに、事実を増やさずに話を厚くして書き直してもらう"""
+    p = cfg["program"]
+    for _ in range(2):
+        chars = sum(len(t) for _, t in lines)
+        if chars >= target * 0.88:
+            break
+        label = lambda s: "A" if s == 0 else "B"
+        current = "\n".join(f"{label(s)}: {t}" for s, t in lines)
+        prompt = f"""次のラジオ台本は約{chars}文字で、目標の約{target}文字より短すぎます。約{target}文字（{round(p['target_minutes'])}分）になるように書き直してください。
+
+# 膨らませ方
+- 各話題で、背景・これまでの経緯・数字の意味・今後の予定・リスナーの暮らしや仕事への影響を足す（Google検索で確認できたことだけ。確認できないことは言わない）
+- 2人の掛け合いを増やす（質問と答え、感想、身近な例への置き換え）。ただし同じことの繰り返しや水増しの相づちは入れない
+- 話題の順番・オープニング・エンディングの流れは変えない。新しいニュースは足さない
+
+# 出力
+台本の本文だけ。{fmt}。見出し・ト書き・説明・空行は出力しない
+
+# 今の台本
+{current}"""
+        try:
+            text = ask_gemini(client, cfg, prompt, use_search=cfg["gemini"]["use_search"])
+            new = parse_script(text, p["style"], names)
+            if sum(len(t) for _, t in new) > chars:
+                lines = new
+                log(f"台本を膨らませました: {chars} → {sum(len(t) for _, t in lines)}文字")
+            else:
+                break
+        except Exception as e:  # noqa: BLE001
+            warn(f"台本を目標の長さまで膨らませられませんでした: {str(e)[:150]}")
+            break
+    return lines
+
+
+def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, now: dt.datetime,
+                 cpm: float | None = None) -> tuple[list, bool]:
     p = cfg["program"]
     a, b = p["hosts"]
     if client is not None:
-        target = int(p["target_minutes"] * CHARS_PER_MINUTE)
+        cpm = cpm or CHARS_PER_MINUTE[cfg["tts"]["engine"]]
+        target = int(p["target_minutes"] * cpm)
         if p["style"] == "dialogue":
             cast = (
                 f"A: {a['name']}（{a.get('role') or '進行役'}。明るく話題を振る）\n"
@@ -698,8 +761,11 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
 # 出演者
 {cast}
 
-# 長さ
-全体でおよそ{target}文字（約{round(p['target_minutes'])}分）
+# 長さ（大事）
+全体でおよそ{target}文字（約{round(p['target_minutes'])}分）。短すぎないように、各話題の目安の文字数を守る
+- オープニングとエンディング: 合わせて約{min(600, target // 6)}文字
+{_budget_text(topics, cfg, max(0, target - min(600, target // 6))) if topics else ''}
+- 見出しだけで材料が足りない話題は、Google検索で確認した背景・経緯・今後の予定・数字の意味で厚くし、2人のやり取り（質問と答え、感想、身近な例）で深める
 
 # 構成
 1. オープニング: あいさつ、日付と曜日、今日の天気（下の天気情報を使う。通勤時間帯に雨・雪・霧・凍結の心配があれば運転の注意をひとこと）
@@ -710,7 +776,7 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
 {p['interest_note'] or '（特になし）'}
 
 # 守ること
-- 内容は下のニュース情報と天気情報だけを使い、分からないことを推測で補わない。下に無い話題を検索で見つけて付け足さない
+- 話題は下のニュースだけ。分からないことを推測で補わない。下に無い別のニュースを検索で見つけて付け足さない（下の話題の背景を検索で確かめて補足するのはよい）
 - 見出しの内容がそのジャンルと関係ないと分かったものは、その話題ごと飛ばす
 {search_rule}- 記事の文章をそのまま読まず、話し言葉で短く言い換える。媒体名は「河北新報によると」のように必要なときだけ
 - 耳で聞いて分かる文章にする。1回の発言は1〜3文、1文は短く。URL・記号・括弧・箇条書き・絵文字は使わない
@@ -726,8 +792,9 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
             text = ask_gemini(client, cfg, prompt, use_search=cfg["gemini"]["use_search"])
             lines = parse_script(text, p["style"], (a["name"], b["name"]))
             if len(lines) >= 3:
-                chars = sum(len(t) for _, t in lines)
-                log(f"台本: {len(lines)}行・{chars}文字（目標 {target}文字）")
+                log(f"台本: {len(lines)}行・{sum(len(t) for _, t in lines)}文字（目標 {target}文字・1分あたり{cpm:.0f}文字で計算）")
+                if topics:
+                    lines = _expand_script(client, cfg, lines, target, fmt, (a["name"], b["name"]))
                 return lines, True
             warn("AIの台本が短すぎたため、簡易版で作成しました")
         except Exception as e:  # noqa: BLE001
@@ -880,6 +947,19 @@ async def _tts_all(lines: list[tuple[int, str]], cfg: dict) -> list[bytes | None
 
 
 # ---- Gemini TTS（自然な声）
+def ffmpeg_exe() -> str | None:
+    """音声変換ツール ffmpeg の場所。入っていなければ pip の imageio-ffmpeg に同梱のものを使う（apt は使わない）"""
+    path = shutil.which("ffmpeg")
+    if path:
+        return path
+    try:
+        import imageio_ffmpeg
+
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _rate_factor(rate: str) -> float:
     try:
         return clamp(1 + int(rate.rstrip("%")) / 100, 0.8, 1.3)
@@ -972,10 +1052,16 @@ def synthesize_gemini(client, lines: list[tuple[int, str]], cfg: dict) -> tuple[
                 except Exception as e:  # noqa: BLE001
                     last = e
                     msg = str(e)
-                    log(f"Gemini TTS エラー（{model}・{ci + 1}/{len(chunks)}・{attempt + 1}回目）: {msg[:200]}")
+                    log(f"Gemini TTS エラー（{model}・{ci + 1}/{len(chunks)}・{attempt + 1}回目）: {msg[:300]}")
                     if any(s in msg for s in ("NOT_FOUND", "INVALID_ARGUMENT", " 404", " 400", "PERMISSION_DENIED")):
-                        break
-                    time.sleep(30 if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) else 8)
+                        break  # このモデルは使えない → 次のモデルへ
+                    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                        if "PerDay" in msg or "per day" in msg.lower() or "_per_day" in msg:
+                            warn(f"{model} の1日の無料回数を使い切ったため、別のモデルで続けます")
+                            break  # 1日の上限 → 待っても無駄なので、別モデル（別の無料枠）へ
+                        time.sleep(65)  # 1分あたりの上限 → 1分待ってやり直す
+                    else:
+                        time.sleep(8)
             if last is None:
                 if model != models[0]:
                     models.remove(model)
@@ -986,18 +1072,96 @@ def synthesize_gemini(client, lines: list[tuple[int, str]], cfg: dict) -> tuple[
         if last is not None:
             raise RuntimeError(f"Gemini で音声を作れませんでした: {last}")
         if ci + 1 < len(chunks):
-            time.sleep(6)  # 無料枠の回数制限に引っかかりにくくする
+            time.sleep(25)  # 無料枠は1分に数回までなので間をあける
+    cfg["_tts_model_used"] = models[0]
     pcm += silence(TAIL_MS)
     factor = _rate_factor(cfg["program"]["speech_rate"])
     import subprocess
 
     af = ["-af", f"atempo={factor:.2f}"] if abs(factor - 1) > 0.01 else []
     mp3 = subprocess.run(
-        ["ffmpeg", "-v", "error", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0", *af,
+        [ffmpeg_exe(), "-v", "error", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0", *af,
          "-c:a", "libmp3lame", "-b:a", "64k", "-f", "mp3", "pipe:1"],
         input=bytes(pcm), capture_output=True, check=True).stdout
     frames = clean_mp3(mp3)
     return frames, mp3_duration(frames)
+
+
+def make_voice_samples(client, cfg: dict, site: Path, limit: int = VOICE_SAMPLES_PER_RUN,
+                       only: list[str] | None = None) -> None:
+    """設定画面の「試聴」用に、まだ無い声のサンプルを少しずつ作って voices/ に置く"""
+    import subprocess
+
+    vdir = site / "voices"
+    vdir.mkdir(exist_ok=True)
+    have = {f.stem for f in vdir.glob("*.mp3")}
+    exe = ffmpeg_exe()
+
+    def save(name: str, pcm_or_mp3: bytes, raw_pcm: bool) -> None:
+        src = ["-f", "s16le", "-ar", "24000", "-ac", "1"] if raw_pcm else ["-f", "mp3"]
+        out = subprocess.run([exe, "-v", "error", *src, "-i", "pipe:0", "-af", "loudnorm=I=-16:TP=-1.5",
+                              "-ar", "24000", "-ac", "1", "-c:a", "libmp3lame", "-b:a", "64k", "-f", "mp3", "pipe:1"],
+                             input=pcm_or_mp3, capture_output=True, check=True).stdout
+        (vdir / f"{name}.mp3").write_bytes(out)
+        have.add(name)
+
+    if exe:
+        for v in ("ja-JP-NanamiNeural", "ja-JP-KeitaNeural"):  # 機械音声のサンプル（無料・回数制限なし）
+            if v not in have:
+                try:
+                    async def _edge(voice=v):
+                        import edge_tts
+
+                        buf = bytearray()
+                        async for ch in edge_tts.Communicate(VOICE_SAMPLE_TEXT, voice).stream():
+                            if ch.get("type") == "audio" and ch.get("data"):
+                                buf.extend(ch["data"])
+                        return bytes(buf)
+
+                    save(v, asyncio.run(_edge()), raw_pcm=False)
+                except Exception as e:  # noqa: BLE001
+                    log(f"声のサンプル（{v}）を作れませんでした: {str(e)[:120]}")
+    made = 0
+    if client is not None and exe:
+        chosen = [h["gemini_voice"] for h in cfg["program"]["hosts"]]
+        first = cfg.get("_tts_model_used") or cfg["tts"]["model"]
+        models = [first] + [m for m in [cfg["tts"]["model"], *GEMINI_TTS_FALLBACKS] if m != first]
+        models = list(dict.fromkeys(models))
+        if only is not None:  # 設定画面の「見本を作る」から頼まれた声だけ（作り直しも含む）
+            order, limit = [v for v in only if v in GEMINI_VOICES], len(only)
+            have -= set(order)
+        else:  # 番組作成のついで: 選んでいる2つの声 + limit 個
+            order = chosen + [v for v in GEMINI_VOICES if v not in chosen]
+            limit = limit + sum(1 for v in chosen if v not in have)
+        for v in order:
+            if v in have:
+                continue
+            if made >= limit:
+                break
+            c = copy.deepcopy(cfg)
+            c["program"]["style"] = "single"
+            c["program"]["hosts"][0]["gemini_voice"] = v
+            c["tts"]["direction"] = ""
+            pcm = None
+            for model in list(models):
+                try:
+                    pcm = _gemini_tts_chunk(client, c, [(0, VOICE_SAMPLE_TEXT)], model)
+                    break
+                except Exception as e:  # noqa: BLE001
+                    msg = str(e)
+                    log(f"声のサンプル（{v}・{model}）を作れませんでした: {msg[:160]}")
+                    if len(models) > 1:
+                        models.remove(model)  # 1日の上限や使えないモデル → 別のモデル（別の無料枠）で
+            if pcm is None:
+                warn(f"声の見本（{v}）を作れませんでした。無料枠は毎日回復するので、時間をおいて試してください")
+                break
+            save(v, pcm, raw_pcm=True)
+            made += 1
+            time.sleep(20)  # 無料枠の回数制限に引っかかりにくくする
+    prev = read_json(vdir / "index.json", {})
+    write_json(vdir / "index.json", {"voices": sorted(have), "handled_at": prev.get("handled_at", "")})
+    rest = len([v for v in GEMINI_VOICES if v not in have])
+    log(f"声のサンプル: 今回{made}個作成（自然な声は残り{rest}個）")
 
 
 def post_process(mp3: bytes, cfg: dict) -> tuple[bytes, float]:
@@ -1005,7 +1169,7 @@ def post_process(mp3: bytes, cfg: dict) -> tuple[bytes, float]:
     import subprocess
     import tempfile
 
-    if shutil.which("ffmpeg") is None:
+    if ffmpeg_exe() is None:
         warn("ffmpeg が見つからないため、音量の調整とBGMを省きました")
         return mp3, mp3_duration(mp3)
     p = cfg["program"]
@@ -1031,13 +1195,13 @@ def post_process(mp3: bytes, cfg: dict) -> tuple[bytes, float]:
         else:
             fc = f"{voice},alimiter=limit=0.9[mix]"
             args = ["-i", str(src)]
-        subprocess.run(["ffmpeg", "-y", "-v", "error", *args, "-filter_complex", fc, "-map", "[mix]",
+        subprocess.run([ffmpeg_exe(), "-y", "-v", "error", *args, "-filter_complex", fc, "-map", "[mix]",
                         "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", "64k", str(out)], check=True)
         data = out.read_bytes()
         if use_bgm:  # 最後の3秒をフェードアウト
             dur = mp3_duration(clean_mp3(data))
             out2 = Path(td) / "out2.mp3"
-            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out), "-af", f"afade=t=out:st={max(0, dur - 3):.2f}:d=3",
+            subprocess.run([ffmpeg_exe(), "-y", "-v", "error", "-i", str(out), "-af", f"afade=t=out:st={max(0, dur - 3):.2f}:d=3",
                             "-c:a", "libmp3lame", "-b:a", "64k", str(out2)], check=True)
             data = out2.read_bytes()
     frames = clean_mp3(data)
@@ -1049,19 +1213,42 @@ def synthesize(lines: list[tuple[int, str]], cfg: dict, client=None) -> tuple[by
     if cfg["tts"]["engine"] == "gemini":
         if client is None:
             warn("Gemini が使えないため、軽い機械音声（Edge）で作成しました")
-        elif shutil.which("ffmpeg") is None:
+        elif ffmpeg_exe() is None:
             warn("ffmpeg が見つからないため、軽い機械音声（Edge）で作成しました")
         else:
             try:
+                cfg["_engine_used"] = "gemini"
                 return synthesize_gemini(client, lines, cfg)
             except Exception as e:  # noqa: BLE001
                 warn(f"自然な声（Gemini）で作れなかったため、軽い機械音声（Edge）で作成しました: {str(e)[:200]}")
+    cfg["_engine_used"] = "edge"
     log(f"音声化（Edge）: {len(lines)}行")
     clips = asyncio.run(_tts_all(lines, cfg))
     ok = [c for c in clips if c]
     if len(ok) < max(1, int(len(lines) * 0.7)):
         raise RuntimeError(f"音声化に失敗した行が多すぎます（成功 {len(ok)}/{len(lines)}）")
     return join_mp3(ok)
+
+
+def write_notes_page(site: Path, cfg: dict, ep: dict, lines: list, now: dt.datetime) -> None:
+    """NotebookLM などに読み込ませる「今日のまとめ」ページ（today.html）を書く"""
+    p = cfg["program"]
+    rows = []
+    for t in ep["topics"]:
+        rows.append(f"<li><strong>【{html.escape(t['genre'])}】{html.escape(t['title'])}</strong>"
+                    + (f"（{html.escape(t['source'])}）" if t.get("source") else "")
+                    + f"<br><a href=\"{html.escape(t['link'])}\">{html.escape(t['link'])}</a></li>")
+    script = "".join(f"<p>{html.escape(p['hosts'][s_]['name'])}: {html.escape(t)}</p>" for s_, t in lines)
+    doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>{html.escape(p['title'])} 今日のまとめ {now:%Y-%m-%d}</title>
+<style>body{{font-family:sans-serif;max-width:720px;margin:0 auto;padding:16px;line-height:1.8}}li{{margin-bottom:12px}}a{{word-break:break-all}}</style></head>
+<body><h1>{html.escape(p['title'])} 今日のまとめ（{jp_date(now)}）</h1>
+<p>このページは、今朝の番組で取り上げたニュースのまとめです。</p>
+<h2>天気</h2><p>{html.escape(ep.get('weather') or '（なし）')}</p>
+<h2>ニュース</h2><ul>{''.join(rows) or '<li>（なし）</li>'}</ul>
+<h2>番組の台本</h2>{script}
+</body></html>"""
+    (site / "today.html").write_text(doc, encoding="utf-8")
 
 
 # ---------------------------------------------------------------- サイト（ポッドキャストfeed）
@@ -1231,6 +1418,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base-url", default=None, help="公開URL（例: https://name.github.io/commute-radio）")
     ap.add_argument("--force", action="store_true", help="作成する曜日の設定を無視して作成する")
     ap.add_argument("--dry-run", action="store_true", help="収集と台本作成だけ行い、音声化・保存はしない")
+    ap.add_argument("--voice-sample", default=os.environ.get("VOICE_SAMPLE", ""),
+                    help="番組は作らず、指定した声（カンマ区切り）の試聴用サンプルだけ作る")
     args = ap.parse_args(argv)
 
     cfg = load_config(Path(args.config))
@@ -1244,6 +1433,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.dry_run:
         copy_web_assets(site)
+
+    # 試聴サンプルの依頼: 引数／環境変数、または設定画面が config.json に書いた依頼（まだ処理していないもの）
+    req = cfg["tts"].get("sample_request") or {}
+    vindex = read_json(site / "voices" / "index.json", {})
+    pending = isinstance(req, dict) and req.get("voice") and str(req.get("at", "")) > str(vindex.get("handled_at", ""))
+    if args.voice_sample.strip() or pending:
+        voices = [v.strip() for v in (args.voice_sample or req.get("voice", "")).split(",") if v.strip()]
+        log(f"声のサンプルを作ります（番組は作りません）: {', '.join(voices)}")
+        if not args.dry_run:
+            make_voice_samples(make_client(), cfg, site, only=voices)
+            if pending:
+                vi = read_json(site / "voices" / "index.json", {})
+                vi["handled_at"] = str(req.get("at", ""))
+                write_json(site / "voices" / "index.json", vi)
+            write_site(site, cfg, state, base_url, now)
+        return 0
 
     if not force and DAY_KEYS[now.weekday()] not in p["days"]:
         log(f"今日（{WEEKDAY_JA[now.weekday()]}曜日）は番組を作らない設定です")
@@ -1263,7 +1468,8 @@ def main(argv: list[str] | None = None) -> int:
 
     client = make_client()
     topics, select_ai = select_topics(client, cfg, items)
-    lines, script_ai = write_script(client, cfg, topics, weather, now)
+    cpm = estimate_cpm(state, cfg)
+    lines, script_ai = write_script(client, cfg, topics, weather, now, cpm)
     mode = "ai" if script_ai else "fallback"
 
     if args.dry_run:
@@ -1303,6 +1509,11 @@ def main(argv: list[str] | None = None) -> int:
         "bytes": len(audio),
         "duration": round(duration, 1),
         "mode": mode,
+        # 次回の長さの見積もりに使う（台本の文字数と、話している部分の長さ）
+        "chars": sum(len(t) for _, t in lines),
+        "engine": cfg.get("_engine_used", cfg["tts"]["engine"]),
+        "rate_factor": _rate_factor(p["speech_rate"]),
+        "speech_minutes": round(max(0.1, duration - (8 if p["bgm"] != "none" else 3)) / 60, 2),
         "weather": weather["text"] if weather else "",
         "topics": [{"genre": t["genre"], "title": t["title"], "source": t["source"], "link": t["link"]} for t in topics],
     }
@@ -1317,6 +1528,15 @@ def main(argv: list[str] | None = None) -> int:
         "message": f"{minutes}、話題{len(topics)}本（候補{len(items)}件から選択）",
         "warnings": WARNINGS[-10:],
     }
+    try:
+        write_notes_page(site, cfg, episode, lines, now)
+    except Exception as e:  # noqa: BLE001
+        warn(f"今日のまとめページを作れませんでした: {e}")
+    if cfg.get("_engine_used") == "gemini" and client is not None:
+        try:  # 選んでいる声の試聴用サンプルがまだ無ければ作る（最大2回）
+            make_voice_samples(client, cfg, site)
+        except Exception as e:  # noqa: BLE001
+            log(f"声のサンプル作成をスキップ: {e}")
     write_site(site, cfg, state, base_url, now)
     log(f"完成: {mp3_name}（{minutes}・{len(audio) / 1e6:.1f}MB）")
 

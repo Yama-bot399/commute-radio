@@ -196,6 +196,15 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
       </div>
       <p class="url" id="feedUrl"></p>
     </div>
+
+    <h2>NotebookLM で聞く</h2>
+    <div class="panel">
+      <p>今朝の話題のまとめページを NotebookLM の「ソース」に追加して「音声解説」を作ると、NotebookLM の2人の声で聞けます（毎回スマホで操作が必要です）。</p>
+      <div class="row">
+        <a class="btn secondary" id="notesLink" href="today.html" target="_blank" rel="noopener">今日のまとめを開く</a>
+        <button class="btn secondary" id="copyNotes" type="button">まとめのURLをコピー</button>
+      </div>
+    </div>
   </section>
 
   <!-- ===================== 設定 ===================== -->
@@ -311,12 +320,16 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
           <small>自然な声は Gemini で作ります。使えない日は自動で機械音声になります。</small></div>
         <div class="two">
           <label class="field" style="margin-top:0"><span>進行役の名前</span><input type="text" id="hostAName"></label>
-          <label class="field" style="margin-top:0"><span>声</span><select id="hostAVoice"></select></label>
+          <div class="field" style="margin-top:0"><span>声</span><select id="hostAVoice"></select>
+            <button class="btn quiet voice-try" id="tryA" type="button" style="margin-top:6px;width:100%">試聴</button></div>
         </div>
         <div class="two" id="hostBRow">
           <label class="field"><span>解説役の名前</span><input type="text" id="hostBName"></label>
-          <label class="field"><span>声</span><select id="hostBVoice"></select></label>
+          <div class="field"><span>声</span><select id="hostBVoice"></select>
+            <button class="btn quiet voice-try" id="tryB" type="button" style="margin-top:6px;width:100%">試聴</button></div>
         </div>
+        <audio id="voiceAudio" preload="none"></audio>
+        <p class="muted" id="voiceStatus" style="margin-top:8px"></p>
         <label class="field" id="directionRow"><span>話し方の演出（自然な声のとき）</span>
           <input type="text" id="ttsDirection" placeholder="例: 落ち着いた朝の番組らしく、ゆったりと">
           <small>空欄なら「生放送のラジオのように自然に」で話します。</small></label>
@@ -466,6 +479,11 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     const feed = (data && data.feed) || feedUrl();
     $("#feedUrl").textContent = feed;
     $("#apLink").href = `https://antennapod.org/deeplink/subscribe?url=${encodeURIComponent(feed)}&title=${encodeURIComponent(title)}`;
+    $("#copyNotes").onclick = async () => {
+      const u = new URL("today.html", location.href).href;
+      try { await navigator.clipboard.writeText(u); toast("まとめのURLをコピーしました"); }
+      catch { toast(u, false); }
+    };
     $("#copyFeed").onclick = async () => {
       try { await navigator.clipboard.writeText(feed); toast("フィードのURLをコピーしました"); }
       catch { toast("コピーできませんでした。下のURLを長押ししてコピーしてください", true); }
@@ -739,10 +757,48 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
       fillSelect($("#hostBVoice"), g ? GVOICES : VOICES, g ? (b.gemini_voice || "Charon") : (b.voice || VOICES[1][0]));
       $("#directionRow").classList.toggle("hidden", !g);
     };
-    segBind($("#engineSeg"), t.engine, v => { t.engine = v; paintVoices(); });
     paintVoices();
-    $("#hostAVoice").onchange = e => { if (t.engine === "gemini") a.gemini_voice = e.target.value; else a.voice = e.target.value; setDirty(true); };
-    $("#hostBVoice").onchange = e => { if (t.engine === "gemini") b.gemini_voice = e.target.value; else b.voice = e.target.value; setDirty(true); };
+    $("#hostAVoice").onchange = e => { if (t.engine === "gemini") a.gemini_voice = e.target.value; else a.voice = e.target.value; setDirty(true); paintTry(); };
+    $("#hostBVoice").onchange = e => { if (t.engine === "gemini") b.gemini_voice = e.target.value; else b.voice = e.target.value; setDirty(true); paintTry(); };
+    // ---- 声の試聴（サンプルが無い声は「見本を作る」で作ってもらう）
+    const vAudio = $("#voiceAudio"), vStatus = $("#voiceStatus");
+    let samples = new Set();
+    const loadSamples = async () => {
+      try { const r = await fetch("voices/index.json?t=" + Date.now(), { cache: "no-store" }); samples = new Set((await r.json()).voices || []); }
+      catch { samples = new Set(); }
+      paintTry();
+    };
+    function paintTry() {
+      for (const [btn, sel] of [[$("#tryA"), $("#hostAVoice")], [$("#tryB"), $("#hostBVoice")]]) {
+        const v = sel.value, has = samples.has(v);
+        btn.textContent = has ? `▶ ${v} を試聴` : (t.engine === "gemini" ? `${v} の見本を作る` : "試聴（番組を1回作ると聞けます）");
+        btn.disabled = !has && t.engine !== "gemini";
+        btn.onclick = () => has ? playSample(v, btn) : makeSample(v);
+      }
+    }
+    function playSample(v, btn) {
+      if (!vAudio.paused && vAudio.dataset.v === v) { vAudio.pause(); return; }
+      vAudio.src = `voices/${v}.mp3?t=${Date.now()}`; vAudio.dataset.v = v;
+      vAudio.play().catch(() => toast("再生できませんでした", true));
+    }
+    async function makeSample(v) {
+      if (needToken()) return;
+      if (!confirm(`「${v}」の見本の音声を作ります。3〜5分かかり、Gemini の無料枠（1日10回ほど）を1回使います。作りますか？`)) return;
+      t.sample_request = { voice: v, at: new Date().toISOString() };
+      if (!(await save())) return;
+      try {
+        const since = Date.now();
+        await gh(`/repos/${state.repo}/actions/workflows/${WF}/dispatches`, { method: "POST", body: { ref: state.branch } });
+        vStatus.textContent = `「${v}」の見本を作っています（3〜5分）。この画面のままお待ちください。`;
+        const ok = await watchRun(since, (text, url, kind) => { vStatus.textContent = kind === "ok" ? "" : text; });
+        if (!ok) { vStatus.textContent = "見本を作れませんでした。時間をおいて（無料枠は毎日回復します）もう一度試してください。"; return; }
+        vStatus.textContent = "見本ができました。反映を待っています…";
+        for (let i = 0; i < 12; i++) { await sleep(10000); await loadSamples(); if (samples.has(v)) break; }
+        vStatus.textContent = samples.has(v) ? `「${v}」を試聴できます。` : "もう少し待ってから、ページを開き直してください。";
+      } catch (e) { toast(explain(e), true); }
+    }
+    segBind($("#engineSeg"), t.engine, v => { t.engine = v; paintVoices(); paintTry(); });
+    loadSamples();
     bindInput("ttsDirection", e => e.value = t.direction || "", e => t.direction = e.value);
 
     bindInput("progTitleIn", e => e.value = p.title || "", e => p.title = e.value);
@@ -843,8 +899,8 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     box.append(el("div", { text }));
     if (url) box.append(el("a", { href: url, target: "_blank", rel: "noopener", text: "実行の記録を開く" }));
   }
-  async function watchRun(since) {
-    showRun("作成の準備をしています");
+  async function watchRun(since, report = showRun) {
+    report("作成の準備をしています");
     for (let i = 0; i < 90; i++) {
       await sleep(i === 0 ? 5000 : 10000);
       let run;
@@ -853,15 +909,16 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         run = (data.workflow_runs || []).find(r => new Date(r.created_at).getTime() >= since - 90000);
       } catch { continue; }
       if (!run) continue;
-      if (run.status !== "completed") { showRun("作成中です（数分かかります）", run.html_url, "warn"); continue; }
+      if (run.status !== "completed") { report("作成中です（数分かかります）", run.html_url, "warn"); continue; }
       if (run.conclusion === "success") {
-        showRun("完成しました。サイトへの反映に1分ほどかかります。AntennaPodでは番組リストを下に引っ張って更新してください。", run.html_url, "ok");
+        report("完成しました。サイトへの反映に1分ほどかかります。AntennaPodでは番組リストを下に引っ張って更新してください。", run.html_url, "ok");
         setTimeout(loadEpisodes, 60000); setTimeout(loadEpisodes, 120000);
-      } else {
-        showRun("作成に失敗しました。実行の記録で原因を確認してください。", run.html_url, "error");
+        return true;
       }
-      return;
+      report("作成に失敗しました。実行の記録で原因を確認してください。", run.html_url, "error");
+      return false;
     }
+    return false;
   }
 
   // ---------------- 起動
