@@ -2,7 +2,7 @@
   "program": {
     "title": "通勤ラジオ",
     "description": "毎朝届く、自分専用のニュース番組",
-    "style": "dialogue",
+    "style": "single",
     "target_minutes": 24,
     "max_topics": 10,
     "speech_rate": "+0%",
@@ -10,7 +10,8 @@
       {
         "name": "ナナミ",
         "voice": "ja-JP-NanamiNeural",
-        "role": "進行役"
+        "role": "進行役",
+        "gemini_voice": "Achernar"
       },
       {
         "name": "ケイタ",
@@ -27,7 +28,10 @@
       "fri"
     ],
     "keep_episodes": 7,
-    "lookback_hours": 36
+    "lookback_hours": 36,
+    "loudness": -14,
+    "bgm": "morning",
+    "bgm_volume": "medium"
   },
   "genres": [
     {
