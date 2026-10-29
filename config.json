@@ -2,9 +2,9 @@
   "program": {
     "title": "通勤ラジオ",
     "description": "毎朝届く、自分専用のニュース番組",
-    "style": "single",
-    "target_minutes": 24,
-    "max_topics": 15,
+    "style": "dialogue",
+    "target_minutes": 20,
+    "max_topics": 13,
     "speech_rate": "+0%",
     "hosts": [
       {
@@ -39,12 +39,11 @@
       "enabled": true,
       "priority": 3,
       "keywords": [
-        "ベガルタ仙台",
-        "コメント"
+        "ベガルタ仙台"
       ],
       "feeds": [],
       "exclude": [],
-      "note": "試合結果・次の試合・選手の話題を優先"
+      "note": "試合結果・次の試合・選手の話題を優先。"
     },
     {
       "name": "製造業・FA・ロボット",
@@ -91,8 +90,9 @@
       "enabled": true,
       "priority": 2,
       "keywords": [
-        "おすすめ",
-        "小説"
+        "おすすめ小説",
+        "小説",
+        "読書"
       ],
       "feeds": [],
       "exclude": [
