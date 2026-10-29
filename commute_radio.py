@@ -108,7 +108,8 @@ def log(msg: str) -> None:
 
 
 def warn(msg: str) -> None:
-    WARNINGS.append(msg)
+    if msg not in WARNINGS:
+        WARNINGS.append(msg)
     log("⚠ " + msg)
 
 
@@ -502,16 +503,30 @@ def make_client():
 _GEMINI_DISABLED: list[str] = []  # APIキーが無効と分かったら以降は呼ばない
 
 
+_SEARCH_OFF: list[bool] = []  # 検索つきで回数制限に当たったら、この実行では検索を使わない
+_MODEL_OUT: set[str] = set()  # 回数制限に当たったモデル（この実行では使わない）
+START_TIME = time.time()
+TIME_BUDGET_MIN = float(os.environ.get("TIME_BUDGET_MIN", "21"))  # GitHub の打ち切り（既定25分）より前に終える目安
+
+
+def elapsed_min() -> float:
+    return (time.time() - START_TIME) / 60
+
+
+def _is_quota(msg: str) -> bool:
+    return "429" in msg or "RESOURCE_EXHAUSTED" in msg
+
+
 def ask_gemini(client, cfg: dict, prompt: str, *, json_mode: bool = False, use_search: bool = False) -> str:
     from google.genai import types
 
     if _GEMINI_DISABLED:
         raise RuntimeError(_GEMINI_DISABLED[0])
     g = cfg["gemini"]
-    models = [g["model"]] + ([FALLBACK_MODEL] if g["model"] != FALLBACK_MODEL else [])
+    models = [m for m in dict.fromkeys([g["model"], FALLBACK_MODEL, "gemini-2.5-flash"]) if m not in _MODEL_OUT]
     last: Exception | None = None
     for model in models:
-        for search in ([True, False] if use_search else [False]):
+        for search in ([True, False] if use_search and not _SEARCH_OFF else [False]):
             for attempt in range(2):
                 try:
                     kw: dict = {"temperature": g["temperature"]}
@@ -531,14 +546,22 @@ def ask_gemini(client, cfg: dict, prompt: str, *, json_mode: bool = False, use_s
                 except Exception as e:  # noqa: BLE001
                     last = e
                     msg = str(e)
-                    log(f"Gemini エラー（{model}{'・検索あり' if search else ''}・{attempt + 1}回目）: {msg[:300]}")
+                    log(f"Gemini エラー（{model}{'・検索あり' if search else ''}・{attempt + 1}回目）: {msg[:200]}")
                     if "API key not valid" in msg or "API_KEY_INVALID" in msg:
                         _GEMINI_DISABLED.append("GeminiのAPIキーが無効です（GitHubのSecretsの GEMINI_API_KEY を確認）")
                         raise RuntimeError(_GEMINI_DISABLED[0]) from e
+                    if _is_quota(msg):
+                        if search:
+                            _SEARCH_OFF.append(True)  # 検索の回数制限 → 検索なしですぐやり直す
+                        else:
+                            _MODEL_OUT.add(model)  # モデルの回数制限 → 待たずに次のモデルへ
+                        break
                     if any(s in msg for s in ("INVALID_ARGUMENT", "NOT_FOUND", "PERMISSION_DENIED", " 400", " 403", " 404")):
                         break  # この組み合わせは再試行しても無駄なので次へ
                     if attempt == 0:
-                        time.sleep(15)
+                        time.sleep(10)
+            if model in _MODEL_OUT:
+                break
     raise RuntimeError(f"Gemini を呼び出せませんでした: {last}")
 
 
@@ -602,7 +625,11 @@ def select_topics(client, cfg: dict, items: list[dict]) -> tuple[list[dict], boo
             data = parse_json_loose(ask_gemini(client, cfg, prompt, json_mode=True))
             by_id = {it["id"]: it for it in items}
             chosen, seen = [], set()
-            for t in data.get("topics", []):
+            if isinstance(data, dict):
+                data = data.get("topics") or next((v for v in data.values() if isinstance(v, list)), [])
+            for t in data if isinstance(data, list) else []:
+                if not isinstance(t, dict):
+                    t = {"id": str(t)}
                 it = by_id.get(str(t.get("id", "")).strip())
                 if it and it["id"] not in seen:
                     seen.add(it["id"])
@@ -689,6 +716,9 @@ def _expand_script(client, cfg: dict, lines: list, target: int, fmt: str, names:
     for _ in range(2):
         chars = sum(len(t) for _, t in lines)
         if chars >= target * 0.88:
+            break
+        if elapsed_min() > TIME_BUDGET_MIN * 0.4:
+            warn("時間内に終えるため、台本を膨らませる処理を省きました")
             break
         label = lambda s: "A" if s == 0 else "B"
         current = "\n".join(f"{label(s)}: {t}" for s, t in lines)
@@ -952,12 +982,21 @@ def ffmpeg_exe() -> str | None:
     path = shutil.which("ffmpeg")
     if path:
         return path
-    try:
-        import imageio_ffmpeg
+    for attempt in range(2):
+        try:
+            import imageio_ffmpeg
 
-        return imageio_ffmpeg.get_ffmpeg_exe()
-    except Exception:  # noqa: BLE001
-        return None
+            return imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:  # noqa: BLE001
+            if attempt == 0:  # requirements.txt が古くて入っていないときは、ここで入れる
+                import subprocess
+
+                log("ffmpeg が無いので imageio-ffmpeg を入れます")
+                subprocess.run([sys.executable, "-m", "pip", "install", "-q", "imageio-ffmpeg"], check=False)
+                import importlib
+
+                importlib.invalidate_caches()
+    return None
 
 
 def _rate_factor(rate: str) -> float:
@@ -1041,6 +1080,8 @@ def synthesize_gemini(client, lines: list[tuple[int, str]], cfg: dict) -> tuple[
     silence = lambda ms: bytes(int(24000 * ms / 1000) * 2)  # 24kHz・16bit の無音
     pcm += silence(LEAD_IN_MS)
     for ci, chunk in enumerate(chunks):
+        if elapsed_min() > TIME_BUDGET_MIN - 3:
+            raise RuntimeError("GitHub の制限時間内に終わらない見込みのため中断しました")
         last: Exception | None = None
         for model in list(models):
             for attempt in range(3):
@@ -1532,7 +1573,7 @@ def main(argv: list[str] | None = None) -> int:
         write_notes_page(site, cfg, episode, lines, now)
     except Exception as e:  # noqa: BLE001
         warn(f"今日のまとめページを作れませんでした: {e}")
-    if cfg.get("_engine_used") == "gemini" and client is not None:
+    if cfg.get("_engine_used") == "gemini" and client is not None and elapsed_min() < TIME_BUDGET_MIN - 4:
         try:  # 選んでいる声の試聴用サンプルがまだ無ければ作る（最大2回）
             make_voice_samples(client, cfg, site)
         except Exception as e:  # noqa: BLE001
