@@ -6,6 +6,11 @@ on:
     # 番組を作る曜日は設定画面（config.json の days）で選べます。時刻を変えたいときはこの行を編集。
     - cron: "7 20 * * *"
   workflow_dispatch: # 手動実行（Actions画面の Run workflow / 設定画面の「今すぐ作成」）
+    inputs:
+      voice_sample:
+        description: "番組は作らず、この声の試聴サンプルだけ作る（例: Kore。空欄なら番組を作る）"
+        required: false
+        default: ""
 
 permissions:
   contents: write # gh-pages ブランチへ番組を公開するため
@@ -18,7 +23,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v5
 
@@ -45,6 +50,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+          VOICE_SAMPLE: ${{ github.event.inputs.voice_sample || '' }}
+          TIME_BUDGET_MIN: "44" # timeout-minutes より短く
         run: python commute_radio.py --site-dir site
 
       - name: サイトを公開（gh-pages）
