@@ -2,8 +2,8 @@
   "program": {
     "title": "通勤ラジオ",
     "description": "毎朝届く、自分専用のニュース番組",
-    "style": "dialogue",
-    "target_minutes": 20,
+    "style": "single",
+    "target_minutes": 15,
     "max_topics": 13,
     "speech_rate": "+0%",
     "hosts": [
@@ -119,10 +119,10 @@
       "enabled": true,
       "priority": 2,
       "keywords": [
-        "ラーメン",
-        "そば",
-        "パスタ",
-        "海鮮"
+        "宮城　ラーメン",
+        "宮城　そば",
+        "宮城　パスタ",
+        "宮城　海鮮"
       ],
       "feeds": [],
       "exclude": [],
