@@ -11,12 +11,13 @@
         "name": "ナナミ",
         "voice": "ja-JP-NanamiNeural",
         "role": "進行役",
-        "gemini_voice": "Callirrhoe"
+        "gemini_voice": "Laomedeia"
       },
       {
         "name": "ケイタ",
         "voice": "ja-JP-KeitaNeural",
-        "role": "解説役"
+        "role": "解説役",
+        "gemini_voice": "Rasalgethi"
       }
     ],
     "interest_note": "機械的な淡々としたものではなくフリートーク風にして下さい。notebooklmみたいな感じで。笑いも交えて。ニュースにこだわらず聴き物であればOK。",
