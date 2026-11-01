@@ -2,7 +2,7 @@
   "program": {
     "title": "通勤ラジオ",
     "description": "毎朝届く、自分専用のニュース番組",
-    "style": "single",
+    "style": "dialogue",
     "target_minutes": 15,
     "max_topics": 13,
     "speech_rate": "+0%",
@@ -43,7 +43,8 @@
       ],
       "feeds": [],
       "exclude": [],
-      "note": "試合結果・次の試合・選手の話題を優先。"
+      "note": "試合結果・次の試合・選手の話題を優先。",
+      "kind": "news"
     },
     {
       "name": "製造業・FA・ロボット",
@@ -59,7 +60,8 @@
         "求人",
         "転職"
       ],
-      "note": "現場の自動化や改善に役立つ技術・事例を優先"
+      "note": "現場の自動化や改善に役立つ技術・事例を優先",
+      "kind": "news"
     },
     {
       "name": "AI",
@@ -71,7 +73,8 @@
       ],
       "feeds": [],
       "exclude": [],
-      "note": "仕事で使えそうな新しいサービスや機能を優先"
+      "note": "仕事で使えそうな新しいサービスや機能を優先",
+      "kind": "news"
     },
     {
       "name": "仙台・宮城",
@@ -83,14 +86,15 @@
       ],
       "feeds": [],
       "exclude": [],
-      "note": "交通・イベント・地域の出来事を中心に"
+      "note": "交通・イベント・地域の出来事を中心に",
+      "kind": "news"
     },
     {
       "name": "小説",
       "enabled": true,
       "priority": 2,
       "keywords": [
-        "おすすめ小説",
+        "小説 人気",
         "小説",
         "読書"
       ],
@@ -99,34 +103,37 @@
         "アニメ",
         "漫画"
       ],
-      "note": "過去のものでもいいので評価の高いものを一冊紹介して下さい"
+      "note": "過去のものでもいいので評価の高いものを一冊紹介して下さい",
+      "kind": "corner"
     },
     {
       "name": "猫",
       "enabled": true,
       "priority": 1,
       "keywords": [
-        "豆知識",
-        "おすすめグッズ",
+        "猫 豆知識",
+        "猫 おすすめグッズ",
         "猫"
       ],
       "feeds": [],
       "exclude": [],
-      "note": "猫に関する豆知識や面白い話"
+      "note": "猫に関する豆知識や面白い話",
+      "kind": "corner"
     },
     {
       "name": "宮城のおいしい店",
       "enabled": true,
       "priority": 2,
       "keywords": [
-        "宮城　ラーメン",
-        "宮城　そば",
-        "宮城　パスタ",
+        "宮城 ラーメン",
+        "宮城 そば",
+        "宮城 パスタ",
         "宮城　海鮮"
       ],
       "feeds": [],
       "exclude": [],
-      "note": "宮城県内にある評価の高い食事の店を紹介して下さい"
+      "note": "宮城県内にある評価の高い食事の店を紹介して下さい",
+      "kind": "news"
     }
   ],
   "weather": {
@@ -150,10 +157,6 @@
   },
   "site_base_url": "",
   "tts": {
-    "engine": "gemini",
-    "sample_request": {
-      "voice": "Callirrhoe",
-      "at": "2026-10-28T07:49:24.015Z"
-    }
+    "engine": "gemini"
   }
 }
