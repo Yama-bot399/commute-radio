@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#1D4F9C">
+<meta name="commute-radio-version" content="12">
 <title>通勤ラジオ</title>
 <link rel="icon" href="cover.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -154,6 +155,34 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
 .toast { position: fixed; left: 16px; right: 16px; bottom: 120px; max-width: 608px; margin: 0 auto; background: var(--ink);
   color: var(--road); border-radius: 10px; padding: 12px 14px; font-size: 15px; z-index: 20; }
 .toast.error { background: var(--stop); color: #fff; }
+
+/* 紹介コーナーのジャンル: ニュース用の項目を隠す */
+.genre .corner-only { display: none; }
+.genre.corner .corner-only { display: block; }
+.genre.corner span.corner-only { display: inline; }
+.genre.corner .news-only { display: none; }
+.kind-help { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.genre div.field { margin-top: 12px; }
+.genre textarea[data-alt] { min-height: 64px; }
+
+/* 状態チェック */
+.health { margin-top: 12px; }
+.health ul { margin: 4px 0 0; padding-left: 20px; }
+.health .btn { margin-top: 8px; min-height: 40px; }
+.diag-row { display: grid; grid-template-columns: 26px 1fr; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.diag-row:last-child { border-bottom: 0; }
+.diag-mark { font-weight: 700; font-size: 18px; line-height: 1.5; text-align: center; }
+.diag-mark.ok { color: var(--go); }
+.diag-mark.warn { color: var(--amber); }
+.diag-mark.error { color: var(--stop); }
+.diag-title { font-weight: 700; }
+.diag-body { font-size: 14px; }
+.diag-body ol { margin: 6px 0; padding-left: 20px; }
+.diag-body .row { margin-top: 8px; }
+.diag-body .row > .btn { flex: 1 1 160px; min-height: 42px; }
+.runs { list-style: none; padding: 0; margin: 4px 0 0; font-size: 14px; }
+.runs li { padding: 2px 0; }
+footer.ver { text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px; }
 </style>
 </head>
 <body>
@@ -178,6 +207,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
 
   <!-- ===================== 番組 ===================== -->
   <section id="viewShow" role="tabpanel" aria-labelledby="tabShow">
+    <div id="health" class="status error health hidden" role="alert"></div>
     <div id="runStatus" class="status hidden"></div>
 
     <h2>最近の回</h2>
@@ -259,13 +289,6 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
             <button type="button" data-v="-12">とても大きい</button>
           </div>
           <small>番組全体の音量をそろえます。車で小さく感じるときは「とても大きい」に。</small></div>
-        <div class="field"><span>番組の音量</span>
-          <div class="seg" id="loudSeg">
-            <button type="button" data-v="-16">標準</button>
-            <button type="button" data-v="-14">大きめ</button>
-            <button type="button" data-v="-12">とても大きい</button>
-          </div>
-          <small>車の中で小さく感じるときは「とても大きい」にします。</small></div>
         <div class="field"><span>BGM</span>
           <div class="two"><select id="bgmSel">
             <option value="none">なし</option>
@@ -348,7 +371,23 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         <label class="switch" style="margin-top:14px"><input type="checkbox" id="gmSearch"> 見出しだけの話題はGoogle検索で補足する</label>
       </div>
     </div>
+
+    <h2>状態チェック</h2>
+    <div class="panel" id="diagPanel">
+      <p class="muted" id="diagIntro">毎朝の自動作成がきちんと動く状態かを確かめます。</p>
+      <div id="diagList"></div>
+      <div class="row" style="margin-top:8px"><button class="btn quiet" id="diagRecheck" type="button">もう一度確かめる</button></div>
+    </div>
+
+    <h2>ツールの更新</h2>
+    <div class="panel">
+      <p>新しい版の zip（commute-radio-○○.zip）を受け取ったら、ここで選ぶだけで更新できます。ジャンルなどの設定はそのまま残ります。</p>
+      <label class="field"><span>更新ファイル（zip）</span><input type="file" id="updFile" accept=".zip,application/zip"></label>
+      <div class="row" style="margin-top:12px"><button class="btn" id="updBtn" type="button" disabled>この zip で更新する</button></div>
+      <p class="muted" id="updStatus" style="margin-top:8px"></p>
+    </div>
   </section>
+  <footer class="ver" id="verFooter">通勤ラジオ v12</footer>
 </main>
 
 <div class="savebar hidden" id="savebar">
@@ -368,14 +407,22 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
       <input type="text" data-k="name" aria-label="ジャンル名" placeholder="ジャンル名">
       <label class="switch"><input type="checkbox" data-k="enabled"> 放送</label>
     </div>
+    <div class="field"><span>種類</span>
+      <div class="seg" data-role="kind">
+        <button type="button" data-v="news">ニュース</button><button type="button" data-v="corner">紹介コーナー</button>
+      </div>
+      <div class="kind-help news-only">キーワードでニュースを探し、新しい話題を伝えます。</div>
+      <div class="kind-help corner-only">ニュースは探さず、AIが「紹介してほしい内容」に合うものを毎回1つ選んで紹介します（名作の本、豆知識、お店など）。前に紹介したものは避けます。</div></div>
     <div class="field"><span>重要度</span>
       <div class="seg" data-role="priority">
         <button type="button" data-v="1">低</button><button type="button" data-v="2">中</button><button type="button" data-v="3">高</button>
       </div></div>
-    <label class="field"><span>キーワード</span>
+    <label class="field corner-only"><span>紹介してほしい内容</span><textarea data-k="note" data-alt="1" rows="2" placeholder="例: 評価の高い小説を1冊。古い作品でもよい"></textarea></label>
+    <label class="field"><span><span class="news-only">キーワード</span><span class="corner-only">テーマのヒント（なくてもよい）</span></span>
       <textarea data-k="keywords" placeholder="1行に1つ。例: ベガルタ仙台"></textarea>
-      <small>1行に1つ。スペースで区切るとすべての語を含む記事を探します。</small></label>
-    <details>
+      <small class="news-only">1行に1つ。スペースで区切るとすべての語を含む記事を探します（例: 「猫 豆知識」）。</small>
+      <small class="corner-only">例: 仙台 ラーメン。空欄でもかまいません。</small></label>
+    <details class="news-only">
       <summary>RSS、除外ワード、要望</summary>
       <label class="field"><span>RSSのURL</span><textarea data-k="feeds" placeholder="https://…（1行に1つ）"></textarea>
         <small>よく読むサイトのRSSがあれば追加できます。</small></label>
@@ -395,6 +442,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
 <script>
 (() => {
   "use strict";
+  const TOOL_VERSION = "12";
   const $ = (s, el = document) => el.querySelector(s);
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -413,6 +461,8 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     ["Achird","男性・親しみやすい"],["Zubenelgenubi","男性・カジュアル"],["Sadachbia","男性・いきいき"],["Sadaltager","男性・物知り"]]
     .map(([v, d]) => [v, `${v}（${d}）`]);
   const WF = "daily.yml";
+  const WF_PATH = ".github/workflows/daily.yml";
+  const UPDATE_PATH = "commute-radio-update.zip";
 
   function guessRepo() {
     const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
@@ -428,7 +478,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
   function toast(msg, isError) {
     const t = $("#toast");
     t.textContent = msg; t.className = "toast" + (isError ? " error" : "");
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), isError ? 8000 : 4000);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), isError ? 9000 : 4000);
   }
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   function fmtDur(sec) { sec = Math.round(sec || 0); return `${Math.floor(sec / 60)}分${String(sec % 60).padStart(2, "0")}秒`; }
@@ -447,13 +497,23 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
   }
   const lines = v => (Array.isArray(v) ? v : String(v || "").split(/\n/)).map(s => String(s).trim()).filter(Boolean);
   function b64ToUtf8(b64) {
-    const bin = atob(b64.replace(/\s/g, ""));
+    const bin = atob(String(b64 || "").replace(/\s/g, ""));
     return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
   }
-  function utf8ToB64(str) {
-    const bytes = new TextEncoder().encode(str); let bin = "";
+  function bytesToB64(bytes) {
+    let bin = "";
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return btoa(bin);
+  }
+  const utf8ToB64 = str => bytesToB64(new TextEncoder().encode(str));
+  async function copyText(text, okMsg) {
+    try { await navigator.clipboard.writeText(text); toast(okMsg); return true; }
+    catch {
+      // クリップボードが使えないブラウザ向け
+      const ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.append(ta);
+      ta.select(); let ok = false; try { ok = document.execCommand("copy"); } catch {} ta.remove();
+      toast(ok ? okMsg : "コピーできませんでした", !ok); return ok;
+    }
   }
 
   // ---------------- タブ
@@ -465,6 +525,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     // 設定フォームと保存バーは GitHub とつないだ後だけ出す（つなぐ前に編集して保存できない、を防ぐ）
     $("#savebar").classList.toggle("hidden", !(settings && state.cfg && state.token));
     if (settings && !state.cfg && state.repo && state.token) loadConfig().catch(() => {});
+    if (settings) renderDiag();
     history.replaceState(null, "", settings ? "#settings" : location.pathname + location.search);
   }
   $("#tabShow").onclick = () => showTab("show");
@@ -479,15 +540,10 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     const feed = (data && data.feed) || feedUrl();
     $("#feedUrl").textContent = feed;
     $("#apLink").href = `https://antennapod.org/deeplink/subscribe?url=${encodeURIComponent(feed)}&title=${encodeURIComponent(title)}`;
-    $("#copyNotes").onclick = async () => {
-      const u = new URL("today.html", location.href).href;
-      try { await navigator.clipboard.writeText(u); toast("まとめのURLをコピーしました"); }
-      catch { toast(u, false); }
-    };
-    $("#copyFeed").onclick = async () => {
-      try { await navigator.clipboard.writeText(feed); toast("フィードのURLをコピーしました"); }
-      catch { toast("コピーできませんでした。下のURLを長押ししてコピーしてください", true); }
-    };
+    $("#copyNotes").onclick = () => copyText(new URL("today.html", location.href).href, "まとめのURLをコピーしました");
+    $("#copyFeed").onclick = () => copyText(feed, "フィードのURLをコピーしました");
+    const pv = data && data.tool_version;
+    $("#verFooter").textContent = `通勤ラジオ v${TOOL_VERSION}` + (pv && pv !== TOOL_VERSION ? `（番組を作ったプログラム v${pv}）` : "");
 
     const eps = (data && data.episodes) || [];
     const list = $("#episodeList"); list.textContent = "";
@@ -516,8 +572,8 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         if (ep.weather) body.append(el("p", { class: "muted", text: ep.weather }));
         const ul = el("ul", { class: "topics" });
         for (const t of ep.topics || []) {
-          const a = el("a", { href: t.link, target: "_blank", rel: "noopener", text: t.title });
-          ul.append(el("li", {}, el("span", { class: "genre-tag", text: t.genre }), a, t.source ? `（${t.source}）` : ""));
+          const head = t.link ? el("a", { href: t.link, target: "_blank", rel: "noopener", text: t.title }) : el("span", { text: t.title });
+          ul.append(el("li", {}, el("span", { class: "genre-tag", text: t.genre }), head, t.source ? `（${t.source}）` : ""));
         }
         body.append(ul);
         if (ep.script) {
@@ -536,8 +592,8 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     const lr = data && data.last_run;
     const box = $("#runStatus");
     if (lr) {
-      const kind = lr.result === "ok" ? "ok" : lr.result === "skipped" ? "" : "warn";
-      const label = lr.result === "ok" ? "作成しました" : lr.result === "skipped" ? "お休みしました" : "簡易版で作成しました（AIが使えませんでした）";
+      const kind = { ok: "ok", skipped: "", error: "error" }[lr.result] ?? "warn";
+      const label = { ok: "作成しました", skipped: "お休みしました", error: "作成に失敗しました" }[lr.result] || "簡易版で作成しました（AIが使えませんでした）";
       box.className = "status " + kind; box.textContent = "";
       box.append(el("div", { text: `最終実行 ${fmtWhen(lr.time)}：${label}` }));
       if (lr.message && lr.result !== "skipped") box.append(el("div", { class: "muted", text: lr.message }));
@@ -546,6 +602,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         const ul = el("ul"); lr.warnings.forEach(w => ul.append(el("li", { text: w }))); d.append(ul); box.append(d);
       }
     }
+    renderHealth();
   }
   async function loadEpisodes() {
     try {
@@ -559,7 +616,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
   // ---------------- GitHub API
   async function gh(path, opts = {}) {
     const headers = { Accept: "application/vnd.github+json" };
-    if (state.token) headers.Authorization = "Bearer " + state.token;
+    if (state.token && !opts.anon) headers.Authorization = "Bearer " + state.token;
     if (opts.body) headers["Content-Type"] = "application/json";
     let res;
     try {
@@ -571,15 +628,32 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     if (!res.ok) { const err = new Error((data && data.message) || res.statusText); err.status = res.status; throw err; }
     return data;
   }
+  // 読むだけの呼び出し（公開リポジトリなのでトークンが無くても読める。トークンが切れていたらトークン無しで読み直す）
+  async function ghRead(path) {
+    try { return await gh(path); }
+    catch (e) { if (e.status === 401 && state.token) return gh(path, { anon: true }); throw e; }
+  }
   function explain(err) {
     switch (err.status) {
       case 401: return "トークンが無効か期限切れです。作り直して入れ直してください。";
       case 403: return "トークンの権限が足りません。対象をこのリポジトリにし、Contents と Actions を「Read and write」にしてください。";
       case 404: return state.token ? "リポジトリかファイルが見つかりません。リポジトリ名と、トークンの対象リポジトリを確認してください。"
                                    : "リポジトリが見つかりません。リポジトリ名を確認するか、トークンを入れてください。";
-      case 409: case 422: return "ほかの場所で設定が変わっていました。「読み込み直す」を押してから、もう一度保存してください。";
+      case 409: return "ほかの場所で設定が変わっていました。「読み込み直す」を押してから、もう一度保存してください。";
+      case 422: return `GitHub が受け付けませんでした（${err.message || "422"}）。「読み込み直す」を押してから、もう一度試してください。`;
       default: return `GitHubとの通信に失敗しました（${err.message || "不明なエラー"}）`;
     }
+  }
+  // 手動実行（今すぐ作成・見本・更新）が失敗したときの説明（GitHub の返事もそのまま見せる）
+  function explainDispatch(err) {
+    const raw = err.message || "";
+    if (err.status === 422) {
+      if (/workflow_dispatch/i.test(raw)) return `GitHub の daily.yml に手動実行の設定がありません。設定タブの「状態チェック」の案内で daily.yml を直してください。（GitHub: ${raw}）`;
+      if (/input/i.test(raw)) return `daily.yml が古いため、この操作を始められませんでした。設定タブの「状態チェック」の案内で daily.yml を新しくしてください。（GitHub: ${raw}）`;
+      return `作成を始められませんでした。daily.yml が壊れている可能性があります。設定タブの「状態チェック」を確認してください。（GitHub: ${raw}）`;
+    }
+    if (err.status === 404) return `daily.yml が見つかりません。設定タブの「状態チェック」を確認してください。（GitHub: ${raw}）`;
+    return explain(err) + (raw ? `（GitHub: ${raw}）` : "");
   }
   function needToken() {
     if (state.token) return false;
@@ -587,14 +661,24 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     toast("先にトークンを入れて、GitHubとつないでください", true);
     return true;
   }
+  async function ensureBranch() {
+    if (!state.branch) state.branch = (await gh(`/repos/${state.repo}`)).default_branch;
+    return state.branch;
+  }
+  async function dispatch(inputs) {
+    await ensureBranch();
+    const body = { ref: state.branch };
+    if (inputs) body.inputs = inputs;
+    await gh(`/repos/${state.repo}/actions/workflows/${WF}/dispatches`, { method: "POST", body });
+  }
 
   // ---------------- 接続
   // 名前・有効期限・権限を入れた状態でトークン作成画面を開くURL（リポジトリの選択だけは手動）
   function tokenUrl(repo) {
     const owner = String(repo || "").split("/")[0];
     const q = new URLSearchParams({ name: "通勤ラジオ",
-      description: "通勤ラジオの設定画面から、設定の保存と番組の作成を行うためのトークン",
-      expires_in: "366", contents: "write", actions: "write" });
+      description: "通勤ラジオの設定画面から、設定の保存・番組の作成・ツールの更新を行うためのトークン",
+      expires_in: "366", contents: "write", actions: "write", workflows: "write" });
     if (/^[\w.-]+$/.test(owner)) q.set("target_name", owner);
     return "https://github.com/settings/personal-access-tokens/new?" + q.toString();
   }
@@ -619,17 +703,18 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
       await loadConfig(true);
       store.set("cr.repo", repo); store.set("cr.token", token);
       $("#tokenInput").value = ""; renderConnect(); toast("つながりました。設定を読み込みました");
+      checkHealth();
     } catch (e) { state.token = ""; renderConnect(); }
   };
   $("#disconnectBtn").onclick = () => {
     if (state.dirty && !confirm("保存していない変更があります。捨ててトークンを消しますか？")) return;
     store.del("cr.token"); state.token = ""; state.cfg = null; setDirty(false);
     $("#form").classList.add("hidden"); $("#savebar").classList.add("hidden");
-    renderConnect(); toast("このスマホからトークンを消しました");
+    renderConnect(); renderDiag(); toast("このスマホからトークンを消しました");
   };
   $("#reloadBtn").onclick = () => {
     if (state.dirty && !confirm("保存していない変更を捨てて読み込み直しますか？")) return;
-    loadConfig(true).then(() => toast("読み込み直しました")).catch(() => {});
+    loadConfig(true).then(() => { toast("読み込み直しました"); checkHealth(); }).catch(() => {});
   };
 
   // ---------------- 設定の読み込み・保存
@@ -655,7 +740,10 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     while (p.hosts.length < 2) p.hosts.push(p.hosts.length ? { name: "ケイタ", voice: "ja-JP-KeitaNeural", role: "解説役" } : { name: "ナナミ", voice: "ja-JP-NanamiNeural", role: "進行役" });
     p.days = Array.isArray(p.days) ? p.days : ["mon","tue","wed","thu","fri"];
     c.genres = Array.isArray(c.genres) ? c.genres : [];
+    for (const g of c.genres) if (g.kind !== "corner") g.kind = "news";
     c.weather = c.weather || {}; c.gemini = c.gemini || {};
+    c.tts = c.tts || {};
+    delete c.tts.sample_request;  // 古い方式の「見本を作る」の依頼（今は使わない）。次の保存で消える
   }
   function setDirty(d) {
     state.dirty = d;
@@ -694,8 +782,6 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     const tOut = () => $("#topicsOut").textContent = `${p.max_topics || 8}本`;
     bindInput("maxTopics", e => { e.value = p.max_topics || 8; tOut(); }, e => { p.max_topics = +e.value; tOut(); });
     segBind($("#rateSeg"), p.speech_rate || "+0%", v => p.speech_rate = v);
-    segBind($("#loudSeg"), String(p.loudness ?? -14), v => p.loudness = Number(v));
-
     if (![-16, -14, -12].includes(Number(p.loudness))) p.loudness = -14;
     segBind($("#loudSeg"), p.loudness, v => p.loudness = Number(v));
     p.bgm = p.bgm || "morning"; p.bgm_volume = p.bgm_volume || "medium";
@@ -749,18 +835,17 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     const [a, b] = p.hosts;
     bindInput("hostAName", e => e.value = a.name || "", e => a.name = e.value);
     bindInput("hostBName", e => e.value = b.name || "", e => b.name = e.value);
-    c.tts = c.tts || {};
     const t = c.tts; if (t.engine !== "edge") t.engine = "gemini";
     const paintVoices = () => {
-      const g = t.engine === "gemini";
-      fillSelect($("#hostAVoice"), g ? GVOICES : VOICES, g ? (a.gemini_voice || "Aoede") : (a.voice || VOICES[0][0]));
-      fillSelect($("#hostBVoice"), g ? GVOICES : VOICES, g ? (b.gemini_voice || "Charon") : (b.voice || VOICES[1][0]));
-      $("#directionRow").classList.toggle("hidden", !g);
+      const gm = t.engine === "gemini";
+      fillSelect($("#hostAVoice"), gm ? GVOICES : VOICES, gm ? (a.gemini_voice || "Aoede") : (a.voice || VOICES[0][0]));
+      fillSelect($("#hostBVoice"), gm ? GVOICES : VOICES, gm ? (b.gemini_voice || "Charon") : (b.voice || VOICES[1][0]));
+      $("#directionRow").classList.toggle("hidden", !gm);
     };
     paintVoices();
     $("#hostAVoice").onchange = e => { if (t.engine === "gemini") a.gemini_voice = e.target.value; else a.voice = e.target.value; setDirty(true); paintTry(); };
     $("#hostBVoice").onchange = e => { if (t.engine === "gemini") b.gemini_voice = e.target.value; else b.voice = e.target.value; setDirty(true); paintTry(); };
-    // ---- 声の試聴（サンプルが無い声は「見本を作る」で作ってもらう）
+    // ---- 声の試聴（見本が無い声は「見本を作る」で作ってもらう）
     const vAudio = $("#voiceAudio"), vStatus = $("#voiceStatus");
     let samples = new Set();
     const loadSamples = async () => {
@@ -773,29 +858,30 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         const v = sel.value, has = samples.has(v);
         btn.textContent = has ? `▶ ${v} を試聴` : (t.engine === "gemini" ? `${v} の見本を作る` : "試聴（番組を1回作ると聞けます）");
         btn.disabled = !has && t.engine !== "gemini";
-        btn.onclick = () => has ? playSample(v, btn) : makeSample(v);
+        btn.onclick = () => has ? playSample(v) : makeSample(v);
       }
     }
-    function playSample(v, btn) {
+    function playSample(v) {
       if (!vAudio.paused && vAudio.dataset.v === v) { vAudio.pause(); return; }
       vAudio.src = `voices/${v}.mp3?t=${Date.now()}`; vAudio.dataset.v = v;
       vAudio.play().catch(() => toast("再生できませんでした", true));
     }
     async function makeSample(v) {
       if (needToken()) return;
-      if (!confirm(`「${v}」の見本の音声を作ります。3〜5分かかり、Gemini の無料枠（1日10回ほど）を1回使います。作りますか？`)) return;
-      t.sample_request = { voice: v, at: new Date().toISOString() };
-      if (!(await save())) return;
+      if (!confirm(`「${v}」の見本の音声を作ります。3〜5分かかり、Gemini の音声の無料枠（1日10回ほど）を1回使います。作りますか？`)) return;
       try {
         const since = Date.now();
-        await gh(`/repos/${state.repo}/actions/workflows/${WF}/dispatches`, { method: "POST", body: { ref: state.branch } });
+        await dispatch({ voice_sample: v }).catch(e => { throw Object.assign(new Error(explainDispatch(e)), { status: -1 }); });
         vStatus.textContent = `「${v}」の見本を作っています（3〜5分）。この画面のままお待ちください。`;
-        const ok = await watchRun(since, (text, url, kind) => { vStatus.textContent = kind === "ok" ? "" : text; });
-        if (!ok) { vStatus.textContent = "見本を作れませんでした。時間をおいて（無料枠は毎日回復します）もう一度試してください。"; return; }
+        const res = await watchRun(since, (phase, url) => {
+          if (phase === "wait" || phase === "running") vStatus.textContent = `「${v}」の見本を作っています（3〜5分）。この画面のままお待ちください。`;
+        });
+        if (res === "timeout") { vStatus.textContent = "まだ作成中です。しばらくしてからページを開き直してください。"; return; }
+        if (res !== "ok") { vStatus.textContent = "見本を作れませんでした。無料枠は毎日回復するので、時間をおいてもう一度試してください。"; return; }
         vStatus.textContent = "見本ができました。反映を待っています…";
         for (let i = 0; i < 12; i++) { await sleep(10000); await loadSamples(); if (samples.has(v)) break; }
         vStatus.textContent = samples.has(v) ? `「${v}」を試聴できます。` : "もう少し待ってから、ページを開き直してください。";
-      } catch (e) { toast(explain(e), true); }
+      } catch (e) { toast(e.status === -1 ? e.message : explain(e), true); }
     }
     segBind($("#engineSeg"), t.engine, v => { t.engine = v; paintVoices(); paintTry(); });
     loadSamples();
@@ -815,7 +901,12 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     if (!genres.length) list.append(el("p", { class: "muted", text: "ジャンルがありません。「ジャンルを追加」から作ってください。" }));
     genres.forEach((gn, i) => {
       const node = tpl.content.firstElementChild.cloneNode(true);
-      const paint = () => { node.dataset.p = String(gn.priority || 2); node.classList.toggle("off", gn.enabled === false); };
+      const paint = () => {
+        node.dataset.p = String(gn.priority || 2);
+        node.classList.toggle("off", gn.enabled === false);
+        node.classList.toggle("corner", gn.kind === "corner");
+        node.querySelector("[data-k=keywords]").placeholder = gn.kind === "corner" ? "例: 文庫 名作（なくてもよい）" : "1行に1つ。例: ベガルタ仙台";
+      };
       paint();
       for (const f of node.querySelectorAll("[data-k]")) {
         const k = f.dataset.k;
@@ -826,9 +917,14 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         }
         const isList = ["keywords", "feeds", "exclude"].includes(k);
         f.value = isList ? lines(gn[k]).join("\n") : (gn[k] || "");
-        f.oninput = () => { gn[k] = isList ? lines(f.value) : f.value; setDirty(true); };
+        f.oninput = () => {
+          gn[k] = isList ? lines(f.value) : f.value; setDirty(true);
+          // 「要望」の欄は2か所（ニュース用・紹介コーナー用）にあるので、もう片方もそろえる
+          if (k === "note") for (const o of node.querySelectorAll("[data-k=note]")) if (o !== f) o.value = f.value;
+        };
       }
       segBind(node.querySelector("[data-role=priority]"), gn.priority || 2, v => { gn.priority = +v; paint(); });
+      segBind(node.querySelector("[data-role=kind]"), gn.kind === "corner" ? "corner" : "news", v => { gn.kind = v; paint(); });
       node.querySelector("[data-act=up]").disabled = i === 0;
       node.querySelector("[data-act=down]").disabled = i === genres.length - 1;
       node.querySelector("[data-act=up]").onclick = () => move(i, -1);
@@ -846,20 +942,22 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
     [g[i], g[j]] = [g[j], g[i]]; renderGenres(); setDirty(true);
   }
   $("#addGenre").onclick = () => {
-    state.cfg.genres.push({ name: "", enabled: true, priority: 2, keywords: [], feeds: [], exclude: [], note: "", strict: true });
+    state.cfg.genres.push({ name: "", enabled: true, priority: 2, keywords: [], feeds: [], exclude: [], note: "", strict: true, kind: "news" });
     renderGenres(); setDirty(true);
     const last = $("#genreList").lastElementChild; last.scrollIntoView({ block: "center" }); last.querySelector("[data-k=name]").focus();
   };
 
   function validate() {
     const c = state.cfg;
-    c.genres = c.genres.filter(g => (g.name || "").trim() || lines(g.keywords).length || lines(g.feeds).length);
+    c.genres = c.genres.filter(g => (g.name || "").trim() || lines(g.keywords).length || lines(g.feeds).length || (g.note || "").trim());
     for (const g of c.genres) {
       g.name = (g.name || "").trim() || "名前なし";
       for (const k of ["keywords", "feeds", "exclude"]) g[k] = lines(g[k]);
     }
-    if (!c.genres.some(g => g.enabled !== false && (g.keywords.length || g.feeds.length)))
-      return "放送するジャンルに、キーワードかRSSを1つ以上入れてください。";
+    if (!c.genres.some(g => g.enabled !== false && (g.kind === "corner" || g.keywords.length || g.feeds.length)))
+      return "放送するジャンルに、キーワードかRSSを1つ以上入れてください（紹介コーナーはキーワードなしでも大丈夫です）。";
+    const bad = c.genres.find(g => g.enabled !== false && g.kind !== "corner" && !g.keywords.length && !g.feeds.length);
+    if (bad && !confirm(`「${bad.name}」にキーワードがありません。このジャンルの話題は集まりませんが、保存しますか？（紹介コーナーにする場合は「種類」を切り替えてください）`)) return "";
     const w = c.weather;
     if (w.enabled !== false && !(isFinite(w.latitude) && isFinite(w.longitude))) return "天気の緯度・経度を数字で入れてください。";
     if (!c.program.days.length && !confirm("作成する曜日が1つもありません。このままだと自動では作られませんが、保存しますか？")) return "";
@@ -876,7 +974,7 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
         body: { message: "設定を更新（設定画面から）", content: utf8ToB64(content), sha: state.sha, branch: state.branch } });
       state.sha = res.content.sha; renderGenres(); setDirty(false);
       return true;
-    } catch (e) { toast(explain(e), true); return false; }
+    } catch (e) { toast(e.status === 422 || e.status === 409 ? "ほかの場所で設定が変わっていました。「読み込み直す」を押してから、もう一度保存してください。" : explain(e), true); return false; }
     finally { btns.forEach(b => b.disabled = false); }
   }
   $("#saveBtn").onclick = async () => { if (await save()) toast("保存しました。次の番組から反映されます"); };
@@ -886,44 +984,234 @@ input[type=range] { width: 100%; accent-color: var(--sign); min-height: 36px; }
   async function runNow() {
     if (needToken()) return;
     try {
-      if (!state.branch) state.branch = (await gh(`/repos/${state.repo}`)).default_branch;
       const since = Date.now();
-      await gh(`/repos/${state.repo}/actions/workflows/${WF}/dispatches`, { method: "POST", body: { ref: state.branch } });
-      toast("作成を始めました。5分ほどで完成します");
-      watchRun(since);
-    } catch (e) { toast(explain(e), true); }
+      await dispatch();
+      toast("作成を始めました。10〜20分ほどで完成します");
+      watchRun(since, showRun);
+    } catch (e) { toast(explainDispatch(e), true); checkHealth(); }
   }
   $("#runNowShow").onclick = runNow;
-  function showRun(text, url, kind) {
-    const box = $("#runStatus"); box.className = "status " + (kind || ""); box.textContent = "";
+  function showRun(phase, url) {
+    const text = {
+      wait: "作成の準備をしています",
+      running: "作成中です（10〜20分ほどかかります。この画面を閉じても作成は続きます）",
+      ok: "完成しました。サイトへの反映に1分ほどかかります。AntennaPodでは番組リストを下に引っ張って更新してください。",
+      error: "作成に失敗しました。1分ほどすると、下に理由が表示されます（実行の記録でも確認できます）。",
+      timeout: "まだ作成中です。終わるとこのページに表示されます（ページを開き直してください）。",
+    }[phase];
+    const box = $("#runStatus"); box.className = "status " + ({ running: "warn", ok: "ok", error: "error" }[phase] || ""); box.textContent = "";
     box.append(el("div", { text }));
     if (url) box.append(el("a", { href: url, target: "_blank", rel: "noopener", text: "実行の記録を開く" }));
+    if (phase === "ok" || phase === "error") { setTimeout(loadEpisodes, 60000); setTimeout(loadEpisodes, 120000); setTimeout(checkHealth, 60000); }
   }
-  async function watchRun(since, report = showRun) {
-    report("作成の準備をしています");
-    for (let i = 0; i < 90; i++) {
-      await sleep(i === 0 ? 5000 : 10000);
+  // 手動実行の進み具合を見守る。結果: "ok" / "error" / "timeout"
+  async function watchRun(since, report) {
+    report("wait");
+    for (let i = 0; Date.now() - since < 55 * 60 * 1000; i++) {
+      await sleep(i === 0 ? 5000 : i < 20 ? 10000 : 20000);
       let run;
       try {
-        const data = await gh(`/repos/${state.repo}/actions/workflows/${WF}/runs?per_page=5&event=workflow_dispatch`);
-        run = (data.workflow_runs || []).find(r => new Date(r.created_at).getTime() >= since - 90000);
+        const data = await gh(`/repos/${state.repo}/actions/workflows/${WF}/runs?per_page=10&event=workflow_dispatch`);
+        run = (data.workflow_runs || []).filter(r => new Date(r.created_at).getTime() >= since - 90000)
+          .sort((x, y) => new Date(x.created_at) - new Date(y.created_at))[0];
       } catch { continue; }
       if (!run) continue;
-      if (run.status !== "completed") { report("作成中です（数分かかります）", run.html_url, "warn"); continue; }
-      if (run.conclusion === "success") {
-        report("完成しました。サイトへの反映に1分ほどかかります。AntennaPodでは番組リストを下に引っ張って更新してください。", run.html_url, "ok");
-        setTimeout(loadEpisodes, 60000); setTimeout(loadEpisodes, 120000);
-        return true;
-      }
-      report("作成に失敗しました。実行の記録で原因を確認してください。", run.html_url, "error");
-      return false;
+      if (run.status !== "completed") { report("running", run.html_url); continue; }
+      const phase = run.conclusion === "success" ? "ok" : "error";
+      report(phase, run.html_url);
+      return phase;
     }
-    return false;
+    report("timeout");
+    return "timeout";
   }
+
+  // ---------------- 状態チェック（毎朝の自動作成が動く状態か）
+  const marker = t => { const m = /commute-radio-version:\s*(\d+)/.exec(t || ""); return m ? +m[1] : 0; };
+  function analyzeWorkflow(text) {
+    const t = String(text || "").replace(/^﻿/, "");
+    const first = (t.split(/\r?\n/).find(l => l.trim() && !l.trim().startsWith("#")) || "").trim();
+    const yamlish = /^(name|on|"on"|jobs)\s*:/.test(first) && /^(on|"on"|true)\s*:/m.test(t) && /^jobs\s*:/m.test(t);
+    const python = /^(#!|import |from \S+ import |def |class )/m.test(t);  // Python のプログラムが貼られている
+    if (!yamlish || python || !/commute_radio\.py/.test(t)) return { broken: true };
+    return { ok: true, dispatch: /workflow_dispatch/.test(t), version: marker(t) };
+  }
+  let diag = null, diagBusy = null;
+  function checkHealth() {
+    if (!state.repo) return Promise.resolve(null);
+    if (diagBusy) return diagBusy;
+    diagBusy = (async () => {
+      const d = { canon: null, want: 0, wf: null, wfSha: null, wfState: null, runs: null };
+      try { const r = await fetch("daily.yml.txt", { cache: "no-store" }); if (r.ok) { d.canon = await r.text(); d.want = marker(d.canon); } } catch {}
+      try {
+        const f = await ghRead(`/repos/${state.repo}/contents/${WF_PATH}`);
+        d.wfSha = f.sha; d.wf = analyzeWorkflow(b64ToUtf8(f.content));
+      } catch (e) { d.wf = e.status === 404 ? { missing: true } : null; }
+      try { d.wfState = (await ghRead(`/repos/${state.repo}/actions/workflows/${WF}`)).state; } catch {}
+      try { d.runs = (await ghRead(`/repos/${state.repo}/actions/workflows/${WF}/runs?per_page=5`)).workflow_runs || []; } catch {}
+      diag = d;
+      renderHealth(); renderDiag();
+      return d;
+    })().finally(() => { diagBusy = null; });
+    return diagBusy;
+  }
+  function problems() {
+    const out = [], d = diag;
+    if (d && d.wf) {
+      if (d.wf.missing) out.push({ level: "error", fix: true, text: "毎朝の自動作成の設定ファイル（daily.yml）がありません。このままでは番組が作られません。" });
+      else if (d.wf.broken) out.push({ level: "error", fix: true, text: "毎朝の自動作成の設定ファイル（daily.yml）の中身が壊れています（別のファイルの中身が貼られている可能性があります）。このままでは番組が作られません。" });
+      else if (!d.wf.dispatch) out.push({ level: "error", fix: true, text: "daily.yml に手動実行の設定がないため、「今すぐ番組を作る」などが使えません。" });
+      else if (d.want && d.wf.version < d.want) out.push({ level: "warn", fix: true, text: "daily.yml が古いままです（番組は作られますが、一部の機能が使えません）。" });
+    }
+    if (d && /^disabled/.test(d.wfState || "")) out.push({ level: "error", fix: true, text: "毎朝の自動作成が止まっています（GitHub で無効になっています）。" });
+    const last = d && d.runs && d.runs[0], lr = state.episodes && state.episodes.last_run;
+    if (last && last.status === "completed" && !["success", "skipped"].includes(last.conclusion)
+        && (!lr || new Date(last.created_at) > new Date(lr.time))) {
+      const why = { cancelled: "途中で止まりました（時間切れなど）", startup_failure: "始められませんでした（daily.yml の書き方の誤りなど）" }[last.conclusion] || "失敗しました";
+      out.push({ level: "error", text: `最後の実行（${fmtWhen(last.created_at)}）が${why}。`, url: last.html_url });
+    }
+    for (const n of (state.episodes && state.episodes.notices) || []) out.push({ level: "warn", text: n });
+    return out;
+  }
+  function renderHealth() {
+    const box = $("#health"), list = problems();
+    if (!list.length) { box.classList.add("hidden"); return; }
+    const worst = list.some(p => p.level === "error") ? "error" : "warn";
+    box.className = `status ${worst} health`; box.textContent = "";
+    box.append(el("div", { class: "diag-title", text: worst === "error" ? "毎朝の自動作成に問題があります" : "お知らせ" }));
+    const ul = el("ul");
+    for (const p of list) ul.append(el("li", {}, p.text, p.url ? el("a", { href: p.url, target: "_blank", rel: "noopener", text: "（記録を開く）" }) : null));
+    box.append(ul);
+    if (list.some(p => p.fix)) {
+      const b = el("button", { class: "btn secondary", type: "button", text: "直し方を見る" });
+      b.onclick = () => { showTab("settings"); $("#diagPanel").scrollIntoView({ block: "start" }); };
+      box.append(b);
+    }
+  }
+  function diagRow(kind, title, ...body) {
+    const mark = { ok: "✓", warn: "!", error: "✕", wait: "…" }[kind];
+    return el("div", { class: "diag-row" }, el("div", { class: `diag-mark ${kind}`, "aria-hidden": "true", text: mark }),
+      el("div", {}, el("div", { class: "diag-title", text: title }), el("div", { class: "diag-body" }, ...body)));
+  }
+  function btn(text, onclick, cls = "btn secondary") { const b = el("button", { class: cls, type: "button", text }); b.onclick = onclick; return b; }
+  function renderDiag() {
+    const box = $("#diagList"); if (!box) return;
+    box.textContent = "";
+    if (!state.repo) { box.append(el("p", { class: "muted", text: "上の「GitHubとつなぐ」でリポジトリを入れると確かめられます。" })); return; }
+    const d = diag;
+    if (!d) { box.append(diagRow("wait", "確かめています…")); return; }
+    const editUrl = `https://github.com/${state.repo}/edit/${state.branch || "main"}/${WF_PATH}`;
+    const newUrl = `https://github.com/${state.repo}/new/${state.branch || "main"}?filename=${encodeURIComponent(WF_PATH)}`;
+    // 1. daily.yml
+    const wf = d.wf;
+    if (!wf) box.append(diagRow("wait", "毎朝の自動作成の設定（daily.yml）", "GitHub に問い合わせできませんでした。時間をおいて「もう一度確かめる」を押してください。"));
+    else if (wf.ok && wf.dispatch && !(d.want && wf.version < d.want)) box.append(diagRow("ok", "毎朝の自動作成の設定（daily.yml）", `正常です${wf.version ? `（v${wf.version}）` : ""}`));
+    else {
+      const what = wf.missing ? "ファイルがありません。" : wf.broken ? "中身が壊れています（別のファイルの中身が貼られている可能性があります）。" :
+        !wf.dispatch ? "手動実行の設定がありません。" : `古いままです（今 v${wf.version || "?"}・最新 v${d.want}）。`;
+      const steps = el("ol",
+        {}, el("li", {}, "下の「正しい中身をコピー」を押す"),
+        el("li", {}, `「GitHubで開く」を押す（${wf.missing ? "新しいファイルの画面。名前は入力済み" : "daily.yml の編集画面"}）。画面上部のファイル名が daily.yml になっているか確かめる`),
+        el("li", {}, wf.missing ? "中身の欄に貼り付ける" : "中身を全部消して（全選択して削除）、貼り付ける"),
+        el("li", {}, "1行目が「name: 通勤ラジオを作成」になっていることを確かめて、緑の「Commit changes」→ もう一度「Commit changes」"));
+      const row = el("div", { class: "row" },
+        btn("正しい中身をコピー", () => d.canon ? copyText(d.canon, "daily.yml の正しい中身をコピーしました") : toast("見本を読み込めませんでした。導入ガイドの daily.yml をコピーしてください", true)),
+        el("a", { class: "btn secondary", href: wf.missing ? newUrl : editUrl, target: "_blank", rel: "noopener", text: "GitHubで開く" }));
+      const auto = el("div", {}, el("div", { class: "row" }, btn("自動で直す", fixWorkflow, "btn")),
+        el("div", { class: "muted", text: "トークンに Workflows の権限があるときに使えます。うまくいかないときは、下の手順で手で直してください。" }));
+      box.append(diagRow(wf.ok && wf.dispatch ? "warn" : "error", "毎朝の自動作成の設定（daily.yml）", what,
+        d.canon && state.token ? auto : null, el("div", { style: "margin-top:8px", text: "手で直すとき:" }), steps, row));
+    }
+    // 2. 自動作成のスイッチ
+    if (d.wfState) {
+      if (/^disabled/.test(d.wfState)) {
+        box.append(diagRow("error", "毎朝の自動作成のスイッチ", "止まっています（しばらく動きがないと GitHub が自動で止めることがあります）。",
+          el("div", { class: "row" }, btn("有効にする", enableWorkflow, "btn"),
+            el("a", { class: "btn secondary", href: `https://github.com/${state.repo}/actions/workflows/${WF}`, target: "_blank", rel: "noopener", text: "GitHubで開く" }))));
+      } else box.append(diagRow("ok", "毎朝の自動作成のスイッチ", "有効です"));
+    }
+    // 3. 版
+    const pv = state.episodes && state.episodes.tool_version;
+    box.append(diagRow(pv === TOOL_VERSION ? "ok" : "warn", "ツールの版",
+      `この画面 v${TOOL_VERSION}／番組を作ったプログラム ${pv ? "v" + pv : "v11以前"}`,
+      pv === TOOL_VERSION ? null : el("div", { class: "muted", text: "次に番組を作ると、そろいます。" })));
+    // 4. 最近の実行
+    if (d.runs) {
+      const ul = el("ul", { class: "runs" });
+      const res = r => r.status !== "completed" ? "実行中" : ({ success: "成功", failure: "失敗", cancelled: "中止", startup_failure: "開始できず", skipped: "スキップ" }[r.conclusion] || r.conclusion);
+      for (const r of d.runs.slice(0, 5)) ul.append(el("li", {}, `${fmtWhen(r.created_at)}　${r.event === "schedule" ? "自動" : "手動"}　`,
+        el("a", { href: r.html_url, target: "_blank", rel: "noopener", text: res(r) })));
+      const bad = d.runs[0] && d.runs[0].status === "completed" && !["success", "skipped"].includes(d.runs[0].conclusion);
+      box.append(diagRow(bad ? "warn" : "ok", "最近の実行", d.runs.length ? ul : "まだ実行されていません。"));
+    }
+  }
+  async function fixWorkflow() {
+    if (needToken()) return;
+    const d = diag; if (!d || !d.canon) return toast("見本を読み込めませんでした", true);
+    if (!confirm("daily.yml を正しい中身に書き換えます。よろしいですか？")) return;
+    try {
+      await ensureBranch();
+      const body = { message: "daily.yml を正しい中身に直す（設定画面から）", content: utf8ToB64(d.canon), branch: state.branch };
+      if (d.wfSha) body.sha = d.wfSha;
+      await gh(`/repos/${state.repo}/contents/${WF_PATH}`, { method: "PUT", body });
+      toast("daily.yml を直しました");
+      await checkHealth();
+    } catch (e) {
+      if (e.status === 403 || e.status === 404 || e.status === 422)
+        toast("このトークンには daily.yml を書き換える権限（Workflows）がありません。下の「手で直すとき」の手順で直してください。", true);
+      else toast(explain(e), true);
+    }
+  }
+  async function enableWorkflow() {
+    if (needToken()) return;
+    try { await gh(`/repos/${state.repo}/actions/workflows/${WF}/enable`, { method: "PUT" }); toast("自動作成を有効にしました"); await checkHealth(); }
+    catch (e) { toast(explain(e), true); }
+  }
+  $("#diagRecheck").onclick = () => { diag = null; renderDiag(); checkHealth(); };
+
+  // ---------------- ツールの更新（zip をアップロード → GitHub Actions が反映）
+  $("#updFile").onchange = () => { $("#updBtn").disabled = !$("#updFile").files.length; $("#updStatus").textContent = ""; };
+  $("#updBtn").onclick = async () => {
+    if (needToken()) return;
+    const f = $("#updFile").files[0], st = $("#updStatus");
+    if (!f) return;
+    if (f.size > 20e6) return toast("ファイルが大きすぎます（20MBまで）", true);
+    const buf = new Uint8Array(await f.arrayBuffer());
+    if (!(buf[0] === 0x50 && buf[1] === 0x4b)) return toast("zip ファイルではありません。ダウンロードした zip を、展開せずにそのまま選んでください", true);
+    if (!new TextDecoder("latin1").decode(buf).includes("commute_radio.py")) return toast("この zip には commute_radio.py が入っていません。通勤ラジオの更新ファイルを選んでください", true);
+    const ver = (/(\d+)/.exec(f.name) || [])[1];
+    if (!confirm(`「${f.name}」でツールを更新します${ver ? `（v${ver}）` : ""}。設定はそのまま残ります。よろしいですか？`)) return;
+    $("#updBtn").disabled = true;
+    try {
+      await ensureBranch();
+      st.textContent = "アップロードしています…";
+      let sha;
+      try { sha = (await gh(`/repos/${state.repo}/contents/${UPDATE_PATH}?ref=${encodeURIComponent(state.branch)}`)).sha; }
+      catch (e) { if (e.status !== 404) throw e; }
+      const body = { message: `ツールの更新ファイルを追加（${f.name}・設定画面から）`, content: bytesToB64(buf), branch: state.branch };
+      if (sha) body.sha = sha;
+      await gh(`/repos/${state.repo}/contents/${UPDATE_PATH}`, { method: "PUT", body });
+      const since = Date.now();
+      try { await dispatch({ site_only: "true" }); }
+      catch (e) {
+        st.textContent = "アップロードしました。ただ daily.yml が古いか壊れているため、すぐには反映できません。次に番組を作るときに反映されます（すぐ反映したいときは「状態チェック」の案内で daily.yml を新しくしてから、もう一度この操作をしてください）。";
+        checkHealth(); return;
+      }
+      const res = await watchRun(since, phase => {
+        if (phase === "wait" || phase === "running") st.textContent = "反映しています（1〜3分）…";
+      });
+      if (res === "ok") {
+        st.textContent = "更新しました。1分ほどしてから、下のボタンでページを開き直してください。";
+        st.append(el("br"), btn("ページを開き直す", () => location.reload(), "btn quiet"));
+      } else if (res === "timeout") st.textContent = "反映に時間がかかっています。しばらくしてからページを開き直してください。";
+      else st.textContent = "反映に失敗しました。「状態チェック」の「最近の実行」から記録を確認してください。";
+      checkHealth();
+    } catch (e) { st.textContent = ""; toast(explain(e), true); }
+    finally { $("#updBtn").disabled = !$("#updFile").files.length; }
+  };
 
   // ---------------- 起動
   renderConnect();
-  loadEpisodes();
+  loadEpisodes().then(() => checkHealth());
   showTab(location.hash === "#settings" ? "settings" : "show");
 })();
 </script>

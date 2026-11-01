@@ -14,10 +14,13 @@ GitHub Actions から毎朝実行する想定です（.github/workflows/daily.ym
   GEMINI_API_KEY  Google AI Studio のAPIキー（無いときは見出しを読み上げる簡易版になります）
   SITE_BASE_URL   公開URL（省略時は GitHub Actions の情報から https://<owner>.github.io/<repo> を組み立て）
   FORCE_RUN       "1" で --force と同じ（手動実行時にワークフローが設定します）
+  VOICE_SAMPLE    声の名前（カンマ区切り）。番組は作らず、試聴用の見本だけ作る
+  SITE_ONLY       "1" で番組は作らず、番組ページ（設定画面など）だけ更新する
 """
 from __future__ import annotations
 
 import argparse
+import socket
 import asyncio
 import calendar
 import copy
@@ -37,6 +40,8 @@ from email.utils import format_datetime
 from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape
 
+TOOL_VERSION = "12"  # web/index.html と tools/daily.yml にも同じ番号を書く（食い違いを見つけるため）
+socket.setdefaulttimeout(60)  # ネットワークが応答しないまま止まるのを防ぐ
 JST = dt.timezone(dt.timedelta(hours=9), "JST")
 HERE = Path(__file__).resolve().parent
 USER_AGENT = "Mozilla/5.0 (compatible; commute-radio/1.0)"
@@ -65,7 +70,8 @@ GEMINI_VOICES = [
 BGM_CHOICES = ["none", "morning", "lofi", "ambient", "news", "custom"]
 BGM_GAIN = {"small": 0.45, "medium": 0.7, "large": 1.0}  # 声の後ろで流すときのBGMの大きさ
 GEMINI_TTS_FALLBACKS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"]
-TTS_CHUNK_CHARS = 2400  # 1回の音声合成に渡す台本の文字数の目安（約7分）。無料枠は1日10回ほどなので回数を減らす
+TTS_CHUNK_CHARS = 700  # 1回の音声合成に渡す台本の文字数の目安（約2分）。長いと後半で声の調子が崩れるため短めに
+TTS_MAX_CALLS = 6  # 1つの番組で音声合成を呼ぶ回数の上限（無料枠は1日10回ほど。試聴や再試行の分を残す）
 
 DEFAULT_CONFIG: dict = {
     "program": {
@@ -98,6 +104,10 @@ DEFAULT_CONFIG: dict = {
     "tts": {"engine": "gemini", "model": "gemini-3.1-flash-tts-preview", "direction": ""},
     "site_base_url": "",
 }
+
+CORNER_WEIGHT = 1.5  # 紹介コーナー1本の長さ（ニュース1本に対する倍率）
+CORNER_HISTORY = 40  # 紹介コーナーで「前に紹介したもの」として覚えておく数（ジャンルごと）
+SAMPLE_REQUEST_FRESH_MIN = 30  # 設定画面の古い方式の「見本を作る」依頼を受け付ける時間（分）
 
 WARNINGS: list[str] = []
 
@@ -198,14 +208,23 @@ def jp_date(d: dt.datetime) -> str:
 
 
 # ---------------------------------------------------------------- 設定
+class ConfigError(RuntimeError):
+    pass
+
+
 def load_config(path: Path) -> dict:
     user = read_json(path, None)
     if user is None:
         if path.exists():
-            raise SystemExit(f"設定ファイル {path} が読めません（JSONの書式を確認してください）")
+            raise ConfigError(f"設定ファイル {path.name} が読めません（JSONの書式が壊れています。GitHub上で直すか、設定画面から保存し直してください）")
         warn(f"設定ファイル {path} が無いので初期設定で動かします")
         user = {}
+    if not isinstance(user, dict):
+        raise ConfigError(f"設定ファイル {path.name} の中身が正しくありません")
     cfg = deep_merge(DEFAULT_CONFIG, user)
+    for key in ("program", "weather", "gemini", "tts"):  # 手で書き換えて形が崩れていても動くように
+        if not isinstance(cfg.get(key), dict):
+            cfg[key] = copy.deepcopy(DEFAULT_CONFIG[key])
     p = cfg["program"]
     p["style"] = "single" if p.get("style") == "single" else "dialogue"
     p["target_minutes"] = clamp(num(p.get("target_minutes"), 10), 2, 40)
@@ -246,6 +265,8 @@ def load_config(path: Path) -> dict:
                 "note": str(g.get("note") or "").strip(),
                 # true: 見出し（か概要）にキーワードが入っている記事だけ使う
                 "strict": g.get("strict", True) is not False,
+                # news = ニュースを集める / corner = ニュースは探さず、AIが方針に沿って1つ紹介する（名作・豆知識・お店など）
+                "kind": "corner" if g.get("kind") == "corner" else "news",
             }
         )
     cfg["genres"] = genres
@@ -300,8 +321,10 @@ def matches_keyword(text: str, keyword: str) -> bool:
 
 def google_news_url(query: str, lookback_hours: float) -> str:
     days = max(1, int(-(-lookback_hours // 24)))
-    if '"' not in query and " " not in query.strip():
-        query = f'"{query.strip()}"'  # 1語だけのキーワードは完全一致で検索（あいまい検索で無関係な記事が混ざるのを防ぐ）
+    # 全角スペース（「宮城　ラーメン」）も半角スペースと同じ区切りとして扱う
+    query = re.sub(r"\s+", " ", unicodedata.normalize("NFKC", query)).strip()
+    if '"' not in query and " " not in query:
+        query = f'"{query}"'  # 1語だけのキーワードは完全一致で検索（あいまい検索で無関係な記事が混ざるのを防ぐ）
     q = f"{query} when:{days}d"
     return "https://news.google.com/rss/search?" + urllib.parse.urlencode(
         {"q": q, "hl": "ja", "gl": "JP", "ceid": "JP:ja"}
@@ -354,10 +377,12 @@ def collect_news(cfg: dict, now: dt.datetime, recent_titles: list[str]) -> list[
     history_norms = [norm_title(t) for t in recent_titles]
     accepted: list[str] = []
     result: list[dict] = []
-    enabled = [g for g in cfg["genres"] if g["enabled"]]
+    enabled = [g for g in cfg["genres"] if g["enabled"]]  # genre_index はこの並び（紹介コーナーも含む）での番号
     if not enabled:
         warn("有効なジャンルがありません（設定画面でジャンルをONにしてください）")
     for gi, genre in enumerate(enabled):
+        if genre["kind"] == "corner":
+            continue  # 紹介コーナーはニュースを集めない（台本を書くときにAIが選ぶ）
         sources = [(google_news_url(k, p["lookback_hours"]), True, k) for k in genre["keywords"]]
         sources += [(u, False, None) for u in genre["feeds"]]
         if not sources:
@@ -493,8 +518,10 @@ def make_client():
         return None
     try:
         from google import genai
+        from google.genai import types
 
-        return genai.Client(api_key=key)
+        # 応答が返ってこないまま止まらないよう、1回の呼び出しは最大4分で打ち切る
+        return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=240_000))
     except Exception as e:  # noqa: BLE001
         warn(f"Gemini の準備に失敗: {e}")
         return None
@@ -558,6 +585,12 @@ def ask_gemini(client, cfg: dict, prompt: str, *, json_mode: bool = False, use_s
                         break
                     if any(s in msg for s in ("INVALID_ARGUMENT", "NOT_FOUND", "PERMISSION_DENIED", " 400", " 403", " 404")):
                         break  # この組み合わせは再試行しても無駄なので次へ
+                    if "timed out" in msg.lower() or "timeout" in msg.lower():
+                        if search:
+                            _SEARCH_OFF.append(True)  # 検索つきで時間切れ → 検索なしで
+                        else:
+                            _MODEL_OUT.add(model)  # 応答が遅いモデル → 次のモデルへ
+                        break
                     if attempt == 0:
                         time.sleep(10)
             if model in _MODEL_OUT:
@@ -583,14 +616,19 @@ def _fmt_time(d: dt.datetime | None) -> str:
 def genre_lines(cfg: dict) -> str:
     rows = []
     for g in cfg["genres"]:
-        if g["enabled"]:
+        if g["enabled"] and g["kind"] == "news":
             note = f" / 方針: {g['note']}" if g["note"] else ""
             rows.append(f"- {g['name']}（重要度: {PRIORITY_JA[g['priority']]}{note}）")
     return "\n".join(rows) or "（なし）"
 
 
+def corner_genres(cfg: dict) -> list[dict]:
+    return [g for g in cfg["genres"] if g["enabled"] and g["kind"] == "corner"]
+
+
 def select_topics(client, cfg: dict, items: list[dict]) -> tuple[list[dict], bool]:
-    n = cfg["program"]["max_topics"]
+    # 紹介コーナーも1本と数え、合わせて「話題の数（最大）」に収める
+    n = max(1, cfg["program"]["max_topics"] - len(corner_genres(cfg)))
     if not items:
         return [], False
     if client is not None:
@@ -662,28 +700,64 @@ STAGE_RE = re.compile(r"[（(][^）)]{0,10}(笑|拍手|BGM|SE|ジングル|間|�
 EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF☀-➿️]")
 
 
+def _clean_line(t: str) -> str:
+    t = URL_RE.sub("", t)
+    t = STAGE_RE.sub("", t)
+    t = EMOJI_RE.sub("", t)
+    return re.sub(r"\s{2,}", " ", t.replace("**", "").replace("#", "")).strip()
+
+
 def parse_script(text: str, style: str, names: tuple[str, str] = ("", "")) -> list[tuple[int, str]]:
     """「A: 〜」「B: 〜」（出演者名でも可）の行を (話者番号, 文) にする"""
     labels = ["A", "a", "Ａ", "B", "b", "Ｂ"] + [n for n in names if n]
     alt = "|".join(sorted((re.escape(s) for s in labels), key=len, reverse=True))
     speaker_re = re.compile(rf"^\s*[*\-・>\s]*\**\s*({alt})\s*\**\s*[:：]\s*(.+?)\s*$")
-    lines = []
+    lines, loose = [], []
     for raw in text.splitlines():
         m = speaker_re.match(raw)
+        if m and CORNER_RE.search(m.group(2)):
+            continue  # 紹介コーナーの記録行（読み上げない）
+        if m:
+            who = m.group(1)
+            spk = 0 if who in ("A", "a", "Ａ") or (names[0] and who == names[0]) else 1
+            if style == "single":
+                spk = 0
+            t = _clean_line(m.group(2))
+            if t:
+                lines.append((spk, t))
+                loose.append((0, t))
+            continue
+        s = re.sub(r"^[*\-・>`]+\s*", "", raw.strip())
+        if not s or s.startswith(("#", "```", "---", "|", "==")) or s.endswith((":", "：")) or CORNER_RE.search(s):
+            continue
+        t = _clean_line(s)
+        if t:
+            loose.append((0, t))
+    if style == "single" and len(lines) < 3 and sum(len(t) for _, t in loose) >= 200:
+        return loose  # 1人用で「A: 」を付け忘れた台本は、行ごとにそのまま使う
+    return lines
+
+
+CORNER_RE = re.compile(r"#\s*紹介\s*[|｜:：]\s*([^|｜:：]+?)\s*[|｜:：]\s*(.+?)\s*$")
+
+
+def parse_corner_picks(text: str, corners: list[dict]) -> dict[str, str]:
+    """台本の前に書いてもらった「#紹介|ジャンル名|紹介したもの」の行から、紹介したものを読み取る"""
+    names = [g["name"] for g in corners]
+    picks: dict[str, str] = {}
+    for raw in text.splitlines():
+        m = CORNER_RE.search(raw.strip().strip("*`> "))
         if not m:
             continue
-        who = m.group(1)
-        spk = 0 if who in ("A", "a", "Ａ") or (names[0] and who == names[0]) else 1
-        if style == "single":
-            spk = 0
-        t = m.group(2)
-        t = URL_RE.sub("", t)
-        t = STAGE_RE.sub("", t)
-        t = EMOJI_RE.sub("", t)
-        t = re.sub(r"\s{2,}", " ", t.replace("**", "").replace("#", "")).strip()
-        if t:
-            lines.append((spk, t))
-    return lines
+        genre, item = norm_title(m.group(1)), re.sub(r"\s+", " ", m.group(2)).strip().strip("*` ")
+        if not item or not genre:
+            continue
+        name = (next((n for n in names if norm_title(n) == genre), None)
+                or next((n for n in names if genre in norm_title(n) or norm_title(n) in genre), None)
+                or (names[0] if len(names) == 1 else None))
+        if name and name not in picks:
+            picks[name] = item[:80]
+    return picks
 
 
 def estimate_cpm(state: dict, cfg: dict) -> float:
@@ -700,19 +774,48 @@ def estimate_cpm(state: dict, cfg: dict) -> float:
     return clamp(base * factor, 200, 500)
 
 
-def _budget_text(topics: list[dict], cfg: dict, body: int) -> str:
-    weights = []
-    for t in topics:
-        g = next((g for g in cfg["genres"] if g["name"] == t["genre"]), None)
-        weights.append({1: 0.7, 2: 1.0, 3: 1.5}[g["priority"] if g else 2])
-    total = sum(weights) or 1
-    per = [int(body * w / total) for w in weights]
-    return "\n".join(f"- {t['title'][:40]}: 約{n}文字" for t, n in zip(topics, per))
+_PRIORITY_WEIGHT = {1: 0.7, 2: 1.0, 3: 1.5}
 
 
-def _expand_script(client, cfg: dict, lines: list, target: int, fmt: str, names: tuple) -> list:
+def _segments(cfg: dict, topics: list[dict]) -> list[dict]:
+    """放送する順番（設定のジャンル順）に、ニュースの話題と紹介コーナーを並べる"""
+    enabled = [g for g in cfg["genres"] if g["enabled"]]
+    segs, used = [], set()
+    for gi, g in enumerate(enabled):
+        if g["kind"] == "corner":
+            segs.append({"genre": g, "corner": True, "topics": []})
+            continue
+        ts = [t for t in topics if id(t) not in used
+              and (t.get("genre_index") == gi if "genre_index" in t else t.get("genre") == g["name"])]
+        used.update(id(t) for t in ts)
+        if ts:
+            segs.append({"genre": g, "corner": False, "topics": ts})
+    rest = [t for t in topics if id(t) not in used]  # 念のため（どのジャンルにも当てはまらない話題は最後に）
+    if rest:
+        segs.append({"genre": None, "corner": False, "topics": rest})
+    return segs
+
+
+def _budget_text(segs: list[dict], body: int) -> str:
+    items = []
+    for s in segs:
+        g = s["genre"]
+        w = _PRIORITY_WEIGHT[g["priority"] if g else 2]
+        if s["corner"]:
+            items.append((f"{g['name']}の紹介コーナー", w * CORNER_WEIGHT))
+        else:
+            items += [(t["title"][:40], w) for t in s["topics"]]
+    total = sum(w for _, w in items) or 1
+    return "\n".join(f"- {label}: 約{int(body * w / total)}文字" for label, w in items)
+
+
+def _expand_script(client, cfg: dict, lines: list, target: int, fmt: str, names: tuple,
+                   picks: dict | None = None) -> list:
     """台本が目標より短いときに、事実を増やさずに話を厚くして書き直してもらう"""
     p = cfg["program"]
+    keep = ""
+    if picks:
+        keep = "- 紹介コーナーで紹介しているもの（" + "、".join(f"{k}: {v}" for k, v in picks.items()) + "）は変えない\n"
     for _ in range(2):
         chars = sum(len(t) for _, t in lines)
         if chars >= target * 0.88:
@@ -726,9 +829,9 @@ def _expand_script(client, cfg: dict, lines: list, target: int, fmt: str, names:
 
 # 膨らませ方
 - 各話題で、背景・これまでの経緯・数字の意味・今後の予定・リスナーの暮らしや仕事への影響を足す（Google検索で確認できたことだけ。確認できないことは言わない）
-- 2人の掛け合いを増やす（質問と答え、感想、身近な例への置き換え）。ただし同じことの繰り返しや水増しの相づちは入れない
+- 話し手の感想、身近な例への置き換え、ちょっとした雑談を足す。ただし同じことの繰り返しや水増しの相づちは入れない
 - 話題の順番・オープニング・エンディングの流れは変えない。新しいニュースは足さない
-
+{keep}
 # 出力
 台本の本文だけ。{fmt}。見出し・ト書き・説明・空行は出力しない
 
@@ -749,12 +852,16 @@ def _expand_script(client, cfg: dict, lines: list, target: int, fmt: str, names:
 
 
 def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, now: dt.datetime,
-                 cpm: float | None = None) -> tuple[list, bool]:
+                 cpm: float | None = None, corner_history: dict | None = None) -> tuple[list, bool]:
     p = cfg["program"]
     a, b = p["hosts"]
+    segs = _segments(cfg, topics)
+    corners = [s["genre"] for s in segs if s["corner"]]
+    cfg["_corner_picks"] = {}
     if client is not None:
         cpm = cpm or CHARS_PER_MINUTE[cfg["tts"]["engine"]]
         target = int(p["target_minutes"] * cpm)
+        search = cfg["gemini"]["use_search"]
         if p["style"] == "dialogue":
             cast = (
                 f"A: {a['name']}（{a.get('role') or '進行役'}。明るく話題を振る）\n"
@@ -762,27 +869,51 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
             )
             fmt = "各行は「A: 」または「B: 」で始める。2人の自然な掛け合いにし、相づちは入れすぎない"
         else:
-            cast = f"A: {a['name']}（1人で進行するアナウンサー）"
+            cast = f"A: {a['name']}（1人で進行するパーソナリティ）"
             fmt = "各行は「A: 」で始める（1人で話す）。1行は1〜3文で区切る"
-        blocks, current = [], None
-        for t in topics:
-            if t["genre"] != current:
-                current = t["genre"]
-                g = next((g for g in cfg["genres"] if g["name"] == current), None)
-                pr = PRIORITY_JA[g["priority"]] if g else "中"
-                note = f" / 方針: {g['note']}" if g and g["note"] else ""
-                blocks.append(f"\n## {current}（重要度: {pr}{note}）")
-            blocks.append(
-                f"- 見出し: {t['title']}\n  媒体: {t['source'] or '不明'} / 日時: {_fmt_time(t['published'])}"
-                + (f"\n  概要: {t['summary']}" if t["summary"] else "")
-                + (f"\n  伝えるポイント: {t['point']}" if t.get("point") else "")
-            )
+        blocks = []
+        for s in segs:
+            g = s["genre"]
+            if s["corner"]:
+                past = (corner_history or {}).get(g["name"], [])[-20:]
+                hint = "、".join(g["keywords"])
+                blocks.append(
+                    f"\n## {g['name']}（紹介コーナー・重要度: {PRIORITY_JA[g['priority']]}）\n"
+                    f"- 方針: {g['note'] or g['name'] + 'に関するおすすめを1つ紹介する'}\n"
+                    + (f"- テーマのヒント: {hint}\n" if hint else "")
+                    + (f"- 前に紹介したもの（今回は選ばない）: {'、'.join(past)}\n" if past else "")
+                    + "- ニュースではなく、方針に合うものを1つだけ選び、どんなものか・評価されている点・楽しみ方を具体的に紹介する"
+                )
+                continue
+            name = g["name"] if g else s["topics"][0]["genre"]
+            pr = PRIORITY_JA[g["priority"]] if g else "中"
+            note = f" / 方針: {g['note']}" if g and g["note"] else ""
+            blocks.append(f"\n## {name}（重要度: {pr}{note}）")
+            for t in s["topics"]:
+                blocks.append(
+                    f"- 見出し: {t['title']}\n  媒体: {t['source'] or '不明'} / 日時: {_fmt_time(t['published'])}"
+                    + (f"\n  概要: {t['summary']}" if t["summary"] else "")
+                    + (f"\n  伝えるポイント: {t['point']}" if t.get("point") else "")
+                )
         news = "\n".join(blocks) if blocks else "（今日はニュースを取得できませんでした。天気と、良い一日をという挨拶だけで短くまとめる）"
         search_rule = (
             "- 見出ししか無い話題は、Google検索で事実を確認して短く補足してよい（確認できない内容は言わない）\n"
-            if cfg["gemini"]["use_search"]
+            if search
             else ""
         )
+        corner_rule = ""
+        if corners:
+            corner_rule = (
+                "- 紹介コーナーは実在するものだけを紹介する。"
+                + ("書名・作者・店名・場所などはGoogle検索で確かめ、確かめられないものや閉店・終了したものは選ばない。"
+                   if search else "よく知られていて確かなものだけを選び、店の営業状況など変わりやすいことは断定しない。")
+                + "前に紹介したものは選ばない\n"
+            )
+        marker_rule = (
+            "- ただし紹介コーナーで選んだものは、台本の本文より前に「#紹介|ジャンル名|紹介したもの（書名と作者、店名と場所など）」"
+            "の形で1行ずつ書く（この行は読み上げない）\n" if corners else ""
+        )
+        opening = min(600, target // 6)
         prompt = f"""あなたは人気ラジオ番組の構成作家です。車で通勤中のリスナーが聞く朝の番組「{p['title']}」の台本を書いてください。
 
 # 放送日
@@ -793,38 +924,42 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
 
 # 長さ（大事）
 全体でおよそ{target}文字（約{round(p['target_minutes'])}分）。短すぎないように、各話題の目安の文字数を守る
-- オープニングとエンディング: 合わせて約{min(600, target // 6)}文字
-{_budget_text(topics, cfg, max(0, target - min(600, target // 6))) if topics else ''}
-- 見出しだけで材料が足りない話題は、Google検索で確認した背景・経緯・今後の予定・数字の意味で厚くし、2人のやり取り（質問と答え、感想、身近な例）で深める
+- オープニングとエンディング: 合わせて約{opening}文字
+{_budget_text(segs, max(0, target - opening)) if segs else ''}
+- 見出しだけで材料が足りない話題は、Google検索で確認した背景・経緯・今後の予定・数字の意味で厚くし、やり取り（質問と答え、感想、身近な例）で深める
 
 # 構成
 1. オープニング: あいさつ、日付と曜日、今日の天気（下の天気情報を使う。通勤時間帯に雨・雪・霧・凍結の心配があれば運転の注意をひとこと）
-2. ニュース: 下の順番どおりに伝える。ジャンルが変わるところで「続いては〇〇の話題です」と区切る。重要度「高」のジャンルは厚めに
+2. 本編: 下の順番どおりに伝える。ジャンルが変わるところで「続いては〇〇の話題です」（紹介コーナーなら「続いては〇〇のコーナーです」）のように区切る。重要度「高」のジャンルは厚めに
 3. エンディング: 今日の話題をひとことで振り返り、「運転気をつけて、いってらっしゃい」のように送り出す
 
 # リスナーの希望
 {p['interest_note'] or '（特になし）'}
 
 # 守ること
-- 話題は下のニュースだけ。分からないことを推測で補わない。下に無い別のニュースを検索で見つけて付け足さない（下の話題の背景を検索で確かめて補足するのはよい）
+- 話題は下のニュースと紹介コーナーだけ。分からないことを推測で補わない。下に無い別のニュースを検索で見つけて付け足さない（下の話題の背景を検索で確かめて補足するのはよい）
 - 見出しの内容がそのジャンルと関係ないと分かったものは、その話題ごと飛ばす
-{search_rule}- 記事の文章をそのまま読まず、話し言葉で短く言い換える。媒体名は「河北新報によると」のように必要なときだけ
+{search_rule}{corner_rule}- 記事の文章をそのまま読まず、話し言葉で短く言い換える。媒体名は「河北新報によると」のように必要なときだけ
 - 耳で聞いて分かる文章にする。1回の発言は1〜3文、1文は短く。URL・記号・括弧・箇条書き・絵文字は使わない
 - 数字は聞き取りやすく言う（例: 2-1 は「2対1」、10/26 は「10月26日」）
 - 出力は台本の本文だけ。{fmt}。見出し・ト書き・説明・空行は出力しない
-
+{marker_rule}
 # 天気
 {weather['text'] if weather else '（天気情報なし。天気には触れない）'}
 
-# ニュース（放送順）
+# 本編の内容（放送順）
 {news}"""
         try:
-            text = ask_gemini(client, cfg, prompt, use_search=cfg["gemini"]["use_search"])
+            text = ask_gemini(client, cfg, prompt, use_search=search)
             lines = parse_script(text, p["style"], (a["name"], b["name"]))
             if len(lines) >= 3:
+                picks = parse_corner_picks(text, corners) if corners else {}
+                cfg["_corner_picks"] = picks
+                if corners and len(picks) < len(corners):
+                    log(f"紹介コーナーの記録行が足りません（{len(picks)}/{len(corners)}）")
                 log(f"台本: {len(lines)}行・{sum(len(t) for _, t in lines)}文字（目標 {target}文字・1分あたり{cpm:.0f}文字で計算）")
-                if topics:
-                    lines = _expand_script(client, cfg, lines, target, fmt, (a["name"], b["name"]))
+                if segs:
+                    lines = _expand_script(client, cfg, lines, target, fmt, (a["name"], b["name"]), picks)
                 return lines, True
             warn("AIの台本が短すぎたため、簡易版で作成しました")
         except Exception as e:  # noqa: BLE001
@@ -1020,13 +1155,17 @@ def _pcm_from_response(data: bytes) -> bytes:
 
 
 def _chunks(lines: list[tuple[int, str]], limit: int = TTS_CHUNK_CHARS) -> list[list[tuple[int, str]]]:
-    out, cur, n = [], [], 0
+    """台本を、なるべく同じ長さの区切りに分ける（行の途中では切らない）"""
+    total = sum(len(t) for _, t in lines)
+    n = max(1, -(-total // max(1, limit)))
+    target = total / n
+    out, cur, acc = [], [], 0
     for ln in lines:
-        if cur and n + len(ln[1]) > limit:
-            out.append(cur)
-            cur, n = [], 0
         cur.append(ln)
-        n += len(ln[1])
+        acc += len(ln[1])
+        if acc >= target * (len(out) + 1) - len(ln[1]) / 2 and len(out) < n - 1:
+            out.append(cur)
+            cur = []
     if cur:
         out.append(cur)
     return out
@@ -1044,7 +1183,23 @@ def _direction(cfg: dict) -> str:
     extra = f"演出の希望: {t['direction']}\n" if t["direction"] else ""
     return ("朝の通勤時間に車で聞く、日本語のラジオ番組です。"
             "原稿を読み上げる調子ではなく、生放送のラジオのように自然な抑揚と間で話してください。"
+            "最初から最後まで、はっきりした普通の声の大きさとトーンを保ち、ささやき声や小声にならないでください。"
             f"{who}\n{extra}以下の台本を、そのとおりに話してください。\n\n")
+
+
+def _level_pcm(pcm: bytes) -> bytes:
+    """区切りごとの声の大きさをそろえる（区切りの変わり目で音量が急に変わらないように）"""
+    exe = ffmpeg_exe()
+    if not exe or len(pcm) < 24000 * 2 * 3:
+        return pcm
+    import subprocess
+
+    try:
+        return subprocess.run([exe, "-v", "error", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0",
+                               "-af", "loudnorm=I=-18:TP=-2:LRA=7", "-ar", "24000", "-ac", "1", "-f", "s16le", "pipe:1"],
+                              input=pcm, capture_output=True, check=True, timeout=120).stdout or pcm
+    except Exception:  # noqa: BLE001
+        return pcm
 
 
 def _gemini_tts_chunk(client, cfg: dict, chunk: list[tuple[int, str]], model: str) -> bytes:
@@ -1073,45 +1228,62 @@ def _gemini_tts_chunk(client, cfg: dict, chunk: list[tuple[int, str]], model: st
 
 
 def synthesize_gemini(client, lines: list[tuple[int, str]], cfg: dict) -> tuple[bytes, float]:
-    chunks = _chunks(lines)
+    total = sum(len(t) for _, t in lines)
+    # 短く区切るほど声が安定するが、回数が増える → 上限回数に収まる範囲でできるだけ短く
+    chunks = _chunks(lines, max(TTS_CHUNK_CHARS, -(-total // TTS_MAX_CALLS)))
     models = [cfg["tts"]["model"]] + [m for m in GEMINI_TTS_FALLBACKS if m != cfg["tts"]["model"]]
     log(f"音声化（Gemini・自然な声）: {len(lines)}行を{len(chunks)}回に分けて作成")
     pcm = bytearray()
     silence = lambda ms: bytes(int(24000 * ms / 1000) * 2)  # 24kHz・16bit の無音
     pcm += silence(LEAD_IN_MS)
+    done = 0  # 自然な声で作れた区切りの数
     for ci, chunk in enumerate(chunks):
-        if elapsed_min() > TIME_BUDGET_MIN - 3:
-            raise RuntimeError("GitHub の制限時間内に終わらない見込みのため中断しました")
-        last: Exception | None = None
-        for model in list(models):
-            for attempt in range(3):
-                try:
-                    pcm += _gemini_tts_chunk(client, cfg, chunk, model)
-                    pcm += silence(500)
-                    last = None
+        try:
+            if elapsed_min() > TIME_BUDGET_MIN - 3:
+                raise RuntimeError("GitHub の制限時間内に終わらない見込みです")
+            last: Exception | None = None
+            for model in list(models):
+                for attempt in range(3):
+                    try:
+                        log(f"音声を作っています（{ci + 1}/{len(chunks)}・{model}・{sum(len(t) for _, t in chunk)}文字）")
+                        pcm += _level_pcm(_gemini_tts_chunk(client, cfg, chunk, model))
+                        pcm += silence(500)
+                        last = None
+                        break
+                    except Exception as e:  # noqa: BLE001
+                        last = e
+                        msg = str(e)
+                        log(f"Gemini TTS エラー（{model}・{ci + 1}/{len(chunks)}・{attempt + 1}回目）: {msg[:300]}")
+                        if any(s in msg for s in ("NOT_FOUND", "INVALID_ARGUMENT", " 404", " 400", "PERMISSION_DENIED")):
+                            break  # このモデルは使えない → 次のモデルへ
+                        if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                            if "PerDay" in msg or "per day" in msg.lower() or "_per_day" in msg:
+                                warn(f"{model} の1日の無料回数を使い切ったため、別のモデルで続けます")
+                                break  # 1日の上限 → 待っても無駄なので、別モデル（別の無料枠）へ
+                            time.sleep(65)  # 1分あたりの上限 → 1分待ってやり直す
+                        else:
+                            time.sleep(8)
+                if last is None:
+                    if model != models[0]:
+                        models.remove(model)
+                        models.insert(0, model)  # 使えたモデルを次から先に使う
                     break
-                except Exception as e:  # noqa: BLE001
-                    last = e
-                    msg = str(e)
-                    log(f"Gemini TTS エラー（{model}・{ci + 1}/{len(chunks)}・{attempt + 1}回目）: {msg[:300]}")
-                    if any(s in msg for s in ("NOT_FOUND", "INVALID_ARGUMENT", " 404", " 400", "PERMISSION_DENIED")):
-                        break  # このモデルは使えない → 次のモデルへ
-                    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                        if "PerDay" in msg or "per day" in msg.lower() or "_per_day" in msg:
-                            warn(f"{model} の1日の無料回数を使い切ったため、別のモデルで続けます")
-                            break  # 1日の上限 → 待っても無駄なので、別モデル（別の無料枠）へ
-                        time.sleep(65)  # 1分あたりの上限 → 1分待ってやり直す
-                    else:
-                        time.sleep(8)
-            if last is None:
-                if model != models[0]:
+                if model in models and len(models) > 1:
                     models.remove(model)
-                    models.insert(0, model)  # 使えたモデルを次から先に使う
-                break
-            if model in models and len(models) > 1:
-                models.remove(model)
-        if last is not None:
-            raise RuntimeError(f"Gemini で音声を作れませんでした: {last}")
+            if last is not None:
+                raise RuntimeError(f"Gemini で音声を作れませんでした: {last}")
+        except RuntimeError as e:
+            if done == 0:
+                raise  # 1つも作れていない → 全部を機械音声で作り直す（synthesize が受け持つ）
+            # 途中まで自然な声で作れたときは、それを生かして残りだけ機械音声で作る
+            warn(f"自然な声で作れなくなったため、{ci + 1}/{len(chunks)} 区切り目から後は軽い機械音声で作成しました"
+                 f"（{str(e)[:120]}）")
+            rest = [ln for ch in chunks[ci:] for ln in ch]
+            pcm += _level_pcm(_edge_pcm(rest, cfg))
+            pcm += silence(500)
+            cfg["_engine_used"] = "mixed"
+            break
+        done += 1
         if ci + 1 < len(chunks):
             time.sleep(25)  # 無料枠は1分に数回までなので間をあける
     cfg["_tts_model_used"] = models[0]
@@ -1126,6 +1298,21 @@ def synthesize_gemini(client, lines: list[tuple[int, str]], cfg: dict) -> tuple[
         input=bytes(pcm), capture_output=True, check=True).stdout
     frames = clean_mp3(mp3)
     return frames, mp3_duration(frames)
+
+
+def _edge_pcm(lines: list[tuple[int, str]], cfg: dict) -> bytes:
+    """機械音声（Edge）で作り、自然な声の音声とつなげられる形（24kHz・モノラル・16bit PCM）にする"""
+    import subprocess
+
+    c = copy.deepcopy(cfg)
+    c["program"]["speech_rate"] = "+0%"  # 速さは最後に番組全体でまとめて調整する
+    clips = asyncio.run(_tts_all(lines, c))
+    ok = [x for x in clips if x]
+    if len(ok) < max(1, int(len(lines) * 0.7)):
+        raise RuntimeError(f"機械音声でも作れませんでした（成功 {len(ok)}/{len(lines)}）")
+    mp3, _ = join_mp3(ok)
+    return subprocess.run([ffmpeg_exe(), "-v", "error", "-f", "mp3", "-i", "pipe:0", "-ar", "24000", "-ac", "1",
+                           "-f", "s16le", "pipe:1"], input=mp3, capture_output=True, check=True).stdout
 
 
 def make_voice_samples(client, cfg: dict, site: Path, limit: int = VOICE_SAMPLES_PER_RUN,
@@ -1246,6 +1433,7 @@ def post_process(mp3: bytes, cfg: dict) -> tuple[bytes, float]:
                             "-c:a", "libmp3lame", "-b:a", "64k", str(out2)], check=True)
             data = out2.read_bytes()
     frames = clean_mp3(data)
+    cfg["_bgm_used"] = use_bgm
     log(f"音量を調整しました（目安 {p['loudness']} LUFS）{'・BGM: ' + p['bgm'] if use_bgm else ''}")
     return frames, mp3_duration(frames)
 
@@ -1276,17 +1464,18 @@ def write_notes_page(site: Path, cfg: dict, ep: dict, lines: list, now: dt.datet
     p = cfg["program"]
     rows = []
     for t in ep["topics"]:
+        link = t.get("link") or ""
         rows.append(f"<li><strong>【{html.escape(t['genre'])}】{html.escape(t['title'])}</strong>"
                     + (f"（{html.escape(t['source'])}）" if t.get("source") else "")
-                    + f"<br><a href=\"{html.escape(t['link'])}\">{html.escape(t['link'])}</a></li>")
+                    + (f"<br><a href=\"{html.escape(link)}\">{html.escape(link)}</a>" if link else "") + "</li>")
     script = "".join(f"<p>{html.escape(p['hosts'][s_]['name'])}: {html.escape(t)}</p>" for s_, t in lines)
     doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>{html.escape(p['title'])} 今日のまとめ {now:%Y-%m-%d}</title>
 <style>body{{font-family:sans-serif;max-width:720px;margin:0 auto;padding:16px;line-height:1.8}}li{{margin-bottom:12px}}a{{word-break:break-all}}</style></head>
 <body><h1>{html.escape(p['title'])} 今日のまとめ（{jp_date(now)}）</h1>
-<p>このページは、今朝の番組で取り上げたニュースのまとめです。</p>
+<p>このページは、今朝の番組で取り上げた話題のまとめです。</p>
 <h2>天気</h2><p>{html.escape(ep.get('weather') or '（なし）')}</p>
-<h2>ニュース</h2><ul>{''.join(rows) or '<li>（なし）</li>'}</ul>
+<h2>話題</h2><ul>{''.join(rows) or '<li>（なし）</li>'}</ul>
 <h2>番組の台本</h2>{script}
 </body></html>"""
     (site / "today.html").write_text(doc, encoding="utf-8")
@@ -1317,7 +1506,9 @@ def episode_html(ep: dict) -> str:
         rows.append(f"<p>{html.escape(ep['weather'])}</p>")
     if ep.get("topics"):
         lis = "".join(
-            f"<li>【{html.escape(t['genre'])}】<a href=\"{html.escape(t['link'])}\">{html.escape(t['title'])}</a>"
+            f"<li>【{html.escape(t['genre'])}】"
+            + (f"<a href=\"{html.escape(t['link'])}\">{html.escape(t['title'])}</a>" if t.get("link")
+               else html.escape(t["title"]))
             + (f"（{html.escape(t['source'])}）" if t.get("source") else "")
             + "</li>"
             for t in ep["topics"]
@@ -1325,7 +1516,9 @@ def episode_html(ep: dict) -> str:
         rows.append(f"<ul>{lis}</ul>")
     if ep.get("mode") == "fallback":
         rows.append("<p>※AIを使わない簡易版（見出しの読み上げ）です。</p>")
-    rows.append("<p>天気データ: Open-Meteo.com（CC BY 4.0）／音声: Microsoft Edge 読み上げ</p>")
+    voice = {"gemini": "Google Gemini", "mixed": "Google Gemini と Microsoft Edge 読み上げ"}.get(ep.get("engine"),
+                                                                                       "Microsoft Edge 読み上げ")
+    rows.append(f"<p>天気データ: Open-Meteo.com（CC BY 4.0）／音声: {voice}</p>")
     return "".join(rows)
 
 
@@ -1382,16 +1575,23 @@ def copy_web_assets(site: Path) -> None:
         (site / "bgm").mkdir(exist_ok=True)
         for f in bgm.glob("*.mp3"):
             shutil.copy2(f, site / "bgm" / f.name)
+    canon = HERE / "tools" / "daily.yml"
+    if canon.is_file():  # 設定画面の「状態チェック」で daily.yml を直すときに使う、正しい中身の見本
+        shutil.copy2(canon, site / "daily.yml.txt")
     (site / ".nojekyll").write_text("", encoding="utf-8")
 
 
 def load_state(site: Path) -> dict:
     ep = read_json(site / "episodes.json", {})
     hist = read_json(site / "history.json", {})
+    corners = hist.get("corners", {}) if isinstance(hist, dict) else {}
     return {
         "episodes": ep.get("episodes", []) if isinstance(ep, dict) else [],
         "last_run": ep.get("last_run") if isinstance(ep, dict) else None,
         "history": hist.get("days", {}) if isinstance(hist, dict) else {},
+        "corners": {str(k): [str(x) for x in v] for k, v in corners.items() if isinstance(v, list)}
+        if isinstance(corners, dict) else {},
+        "notices": [],
     }
 
 
@@ -1421,7 +1621,8 @@ def write_site(site: Path, cfg: dict, state: dict, base_url: str, now: dt.dateti
     history = {
         d: t for d, t in state["history"].items() if _days_ago(d, today) is not None and _days_ago(d, today) <= 4
     }
-    write_json(site / "history.json", {"days": history})
+    corners = {k: v[-CORNER_HISTORY:] for k, v in state.get("corners", {}).items() if v}
+    write_json(site / "history.json", {"days": history, "corners": corners})
     write_json(
         site / "episodes.json",
         {
@@ -1429,6 +1630,8 @@ def write_site(site: Path, cfg: dict, state: dict, base_url: str, now: dt.dateti
             "description": cfg["program"]["description"],
             "feed": base_url + "/feed.xml",
             "updated": now.isoformat(timespec="seconds"),
+            "tool_version": TOOL_VERSION,
+            "notices": state.get("notices", []),
             "last_run": state.get("last_run"),
             "episodes": episodes,
         },
@@ -1451,6 +1654,63 @@ def write_step_summary(md: str) -> None:
             f.write(md + "\n")
 
 
+def _version_marker(text: str) -> str | None:
+    m = re.search(r"commute-radio-version:\s*([0-9]+)", text or "")
+    return m.group(1) if m else None
+
+
+def self_check() -> list[str]:
+    """リポジトリの中の食い違い（更新のし忘れ・貼り間違い）を見つけ、番組ページに出す注意を返す"""
+    notes = []
+    wf, canon = HERE / ".github" / "workflows" / "daily.yml", HERE / "tools" / "daily.yml"
+    try:
+        if canon.is_file() and wf.is_file():
+            want, have = _version_marker(canon.read_text("utf-8")), _version_marker(wf.read_text("utf-8"))
+            if want and (not have or int(have) < int(want)):
+                notes.append("daily.yml が古いままです（今のままでも番組は作られます）。設定タブの「状態チェック」の案内で新しくしてください")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        m = re.search(r'name="commute-radio-version" content="([^"]+)"', (HERE / "web" / "index.html").read_text("utf-8"))
+        if not m or m.group(1) != TOOL_VERSION:
+            notes.append("web/index.html が古いままです。更新ファイル（zip）をもう一度アップロードしてください")
+    except Exception:  # noqa: BLE001
+        pass
+    return notes
+
+
+def read_update_note() -> list[str]:
+    """ワークフローが zip から更新したときの結果（UPDATE_NOTE_FILE）を読む"""
+    path = os.environ.get("UPDATE_NOTE_FILE", "")
+    data = read_json(Path(path), {}) if path else {}
+    return [str(m) for m in data.get("messages", [])] if isinstance(data, dict) else []
+
+
+def _age_min(iso, now: dt.datetime) -> float:
+    try:
+        t = dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=dt.timezone.utc)
+        return (now - t).total_seconds() / 60
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def record_failure(site: Path, cfg: dict | None, state: dict, base_url_arg: str | None, now: dt.datetime,
+                   err: BaseException) -> None:
+    """失敗したことと理由を番組ページ（episodes.json）に残す。ページを開けば原因が分かるように"""
+    try:
+        cfg = cfg or deep_merge(DEFAULT_CONFIG, {})  # 設定が読めなかったときは初期設定で記録だけする
+        msg = str(err).strip() or type(err).__name__
+        state["last_run"] = {"time": now.isoformat(timespec="seconds"), "result": "error",
+                             "message": f"作成に失敗しました: {msg[:300]}", "warnings": WARNINGS[-10:]}
+        write_site(site, cfg, state, resolve_base_url(base_url_arg, cfg), now)
+        write_step_summary(f"## 作成に失敗しました（v{TOOL_VERSION}）\n- {msg[:500]}")
+        log("失敗した理由を番組ページに記録しました")
+    except Exception as e:  # noqa: BLE001
+        log(f"失敗の記録を書けませんでした: {e}")
+
+
 # ---------------------------------------------------------------- メイン
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="通勤ラジオ: 興味のあるニュースを毎朝ポッドキャストにする")
@@ -1461,30 +1721,57 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="収集と台本作成だけ行い、音声化・保存はしない")
     ap.add_argument("--voice-sample", default=os.environ.get("VOICE_SAMPLE", ""),
                     help="番組は作らず、指定した声（カンマ区切り）の試聴用サンプルだけ作る")
+    ap.add_argument("--site-only", action="store_true", default=os.environ.get("SITE_ONLY") == "1",
+                    help="番組は作らず、番組ページ（設定画面など）だけ更新する")
     args = ap.parse_args(argv)
 
-    cfg = load_config(Path(args.config))
     now = dt.datetime.now(JST)
     site = Path(args.site_dir)
     site.mkdir(parents=True, exist_ok=True)
-    base_url = resolve_base_url(args.base_url, cfg)
     state = load_state(site)
+    log(f"通勤ラジオ v{TOOL_VERSION}")
+    state["notices"] = read_update_note() + self_check()
+    for n in state["notices"]:
+        log("📌 " + n)
+    if not args.dry_run:
+        copy_web_assets(site)  # 先に新しい番組ページを置く（この後で失敗しても、ページは新しくなる）
+
+    cfg = None
+    try:
+        cfg = load_config(Path(args.config))
+        return run(args, cfg, site, state, now)
+    except Exception as e:
+        if not args.dry_run:
+            record_failure(site, cfg, state, args.base_url, now, e)
+        raise
+
+
+def run(args, cfg: dict, site: Path, state: dict, now: dt.datetime) -> int:
+    base_url = resolve_base_url(args.base_url, cfg)
     force = args.force or os.environ.get("FORCE_RUN") == "1"
     p = cfg["program"]
 
-    if not args.dry_run:
-        copy_web_assets(site)
+    if args.site_only:
+        log("番組は作らず、番組ページだけ更新します")
+        if not args.dry_run:
+            write_site(site, cfg, state, base_url, now)
+        return 0
 
-    # 試聴サンプルの依頼: 引数／環境変数、または設定画面が config.json に書いた依頼（まだ処理していないもの）
-    req = cfg["tts"].get("sample_request") or {}
-    vindex = read_json(site / "voices" / "index.json", {})
-    pending = isinstance(req, dict) and req.get("voice") and str(req.get("at", "")) > str(vindex.get("handled_at", ""))
-    if args.voice_sample.strip() or pending:
-        voices = [v.strip() for v in (args.voice_sample or req.get("voice", "")).split(",") if v.strip()]
-        log(f"声のサンプルを作ります（番組は作りません）: {', '.join(voices)}")
+    # 試聴用の見本: 設定画面の「見本を作る」（手動実行の voice_sample）から頼まれたとき
+    voices = [v.strip() for v in args.voice_sample.split(",") if v.strip()]
+    req = cfg["tts"].get("sample_request")
+    from_config = False
+    if not voices and isinstance(req, dict) and req.get("voice"):
+        # 古い設定画面の方式（config.json に依頼を書く）。頼んだ直後の手動実行だけ受け付け、毎朝の番組作成は邪魔しない
+        handled = str(read_json(site / "voices" / "index.json", {}).get("handled_at", ""))
+        if force and str(req.get("at", "")) > handled and _age_min(req.get("at"), now) <= SAMPLE_REQUEST_FRESH_MIN:
+            voices = [v.strip() for v in str(req["voice"]).split(",") if v.strip()]
+            from_config = True
+    if voices:
+        log(f"声の見本を作ります（番組は作りません）: {', '.join(voices)}")
         if not args.dry_run:
             make_voice_samples(make_client(), cfg, site, only=voices)
-            if pending:
+            if from_config:
                 vi = read_json(site / "voices" / "index.json", {})
                 vi["handled_at"] = str(req.get("at", ""))
                 write_json(site / "voices" / "index.json", vi)
@@ -1499,30 +1786,41 @@ def main(argv: list[str] | None = None) -> int:
             write_site(site, cfg, state, base_url, now)
         return 0
 
-    log(f"{jp_date(now)}の番組を作ります（{'2人の掛け合い' if p['style'] == 'dialogue' else '1人'}・約{round(p['target_minutes'])}分）")
+    corners = corner_genres(cfg)
+    log(f"{jp_date(now)}の番組を作ります（{'2人の掛け合い' if p['style'] == 'dialogue' else '1人'}・約{round(p['target_minutes'])}分"
+        + (f"・紹介コーナー{len(corners)}本" if corners else "") + "）")
     items = collect_news(cfg, now, recent_titles(state["history"], now))
-    weather = fetch_weather(cfg["weather"], now) if cfg["weather"]["enabled"] else None
-    if weather:
-        log("天気: " + weather["text"])
-    if not items and not weather and not args.dry_run:
-        raise SystemExit("ニュースも天気も取得できませんでした。ネットワークか設定を確認してください。")
+    weather = None
+    if cfg["weather"]["enabled"]:
+        log("天気を取得しています")
+        weather = fetch_weather(cfg["weather"], now)
+        if weather:
+            log("天気: " + weather["text"])
+    if not items and not weather and not corners and not args.dry_run:
+        raise RuntimeError("ニュースも天気も取得できませんでした。ジャンルのキーワードと、ネットワークの状態を確認してください")
 
     client = make_client()
+    log(f"AIが話題を選んでいます（候補{len(items)}件）")
     topics, select_ai = select_topics(client, cfg, items)
+    log(f"話題: {len(topics)}本{f'＋紹介コーナー{len(corners)}本' if corners else ''} → AIが台本を書いています（数分かかります）")
     cpm = estimate_cpm(state, cfg)
-    lines, script_ai = write_script(client, cfg, topics, weather, now, cpm)
+    lines, script_ai = write_script(client, cfg, topics, weather, now, cpm, state["corners"])
     mode = "ai" if script_ai else "fallback"
+    picks = cfg.get("_corner_picks") or {}
 
     if args.dry_run:
         print("\n===== 選んだ話題 =====")
         for t in topics:
             print(f"[{t['genre']}] {t['title']}（{t['source']}）")
+        for name, item in picks.items():
+            print(f"[{name}・紹介] {item}")
         print("\n===== 台本 =====")
         for spk, t in lines:
             print(f"{p['hosts'][spk]['name']}: {t}")
         return 0
 
     audio, duration = synthesize(lines, cfg, client)
+    cfg["_bgm_used"] = False
     try:
         audio, duration = post_process(audio, cfg)
     except Exception as e:  # noqa: BLE001
@@ -1541,6 +1839,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     same_day = any(e["date"][:10] == now.date().isoformat() for e in state["episodes"])
     title = f"{jp_date(now)}の{p['title']}" + (f"（{now:%H:%M}版）" if same_day else "")
+    ep_topics = []  # 放送順（ニュースの話題と紹介コーナー）
+    for s in _segments(cfg, topics):
+        if s["corner"]:
+            name = s["genre"]["name"]
+            if script_ai:
+                ep_topics.append({"genre": name, "title": picks.get(name) or f"{name}（紹介コーナー）",
+                                  "source": "紹介コーナー", "link": "", "kind": "corner"})
+        else:
+            ep_topics += [{"genre": t["genre"], "title": t["title"], "source": t["source"], "link": t["link"]}
+                          for t in s["topics"]]
     episode = {
         "id": ep_id,
         "title": title,
@@ -1554,19 +1862,24 @@ def main(argv: list[str] | None = None) -> int:
         "chars": sum(len(t) for _, t in lines),
         "engine": cfg.get("_engine_used", cfg["tts"]["engine"]),
         "rate_factor": _rate_factor(p["speech_rate"]),
-        "speech_minutes": round(max(0.1, duration - (8 if p["bgm"] != "none" else 3)) / 60, 2),
+        "speech_minutes": round(max(0.1, duration - (8 if cfg.get("_bgm_used") else 3)) / 60, 2),
+        "tool_version": TOOL_VERSION,
         "weather": weather["text"] if weather else "",
-        "topics": [{"genre": t["genre"], "title": t["title"], "source": t["source"], "link": t["link"]} for t in topics],
+        "topics": ep_topics,
     }
     state["episodes"].insert(0, episode)
     day = now.date().isoformat()
     state["history"].setdefault(day, [])
     state["history"][day] += [t["title"] for t in topics]
+    for name, item in picks.items():
+        state["corners"].setdefault(name, []).append(item)
     minutes = f"{int(duration // 60)}分{int(duration % 60):02d}秒"
+    n_corner = sum(1 for t in ep_topics if t.get("kind") == "corner")
     state["last_run"] = {
         "time": now.isoformat(timespec="seconds"),
         "result": "ok" if mode == "ai" else "fallback",
-        "message": f"{minutes}、話題{len(topics)}本（候補{len(items)}件から選択）",
+        "message": f"{minutes}、話題{len(topics)}本（候補{len(items)}件から選択）"
+                   + (f"＋紹介コーナー{n_corner}本" if n_corner else ""),
         "warnings": WARNINGS[-10:],
     }
     try:
@@ -1581,10 +1894,13 @@ def main(argv: list[str] | None = None) -> int:
     write_site(site, cfg, state, base_url, now)
     log(f"完成: {mp3_name}（{minutes}・{len(audio) / 1e6:.1f}MB）")
 
-    md = [f"## {title}", f"- 長さ: {minutes} / 話題 {len(topics)}本（候補 {len(items)}件）/ {'AI台本' if mode == 'ai' else '簡易版'}"]
-    md += [f"- 【{t['genre']}】{t['title']}" for t in topics]
+    md = [f"## {title}（v{TOOL_VERSION}）",
+          f"- 長さ: {minutes} / 話題 {len(topics)}本（候補 {len(items)}件）/ {'AI台本' if mode == 'ai' else '簡易版'}"]
+    md += [f"- 【{t['genre']}】{t['title']}" for t in ep_topics]
     if WARNINGS:
         md += ["", "### 注意"] + [f"- {w}" for w in WARNINGS]
+    if state["notices"]:
+        md += ["", "### お知らせ"] + [f"- {n}" for n in state["notices"]]
     write_step_summary("\n".join(md))
     return 0
 
