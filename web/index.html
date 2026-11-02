@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#1D4F9C">
-<meta name="commute-radio-version" content="12">
+<meta name="commute-radio-version" content="13">
 <title>通勤ラジオ</title>
 <link rel="icon" href="cover.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -387,7 +387,7 @@ footer.ver { text-align: center; color: var(--muted); font-size: 12px; margin-to
       <p class="muted" id="updStatus" style="margin-top:8px"></p>
     </div>
   </section>
-  <footer class="ver" id="verFooter">通勤ラジオ v12</footer>
+  <footer class="ver" id="verFooter">通勤ラジオ v13</footer>
 </main>
 
 <div class="savebar hidden" id="savebar">
@@ -442,7 +442,7 @@ footer.ver { text-align: center; color: var(--muted); font-size: 12px; margin-to
 <script>
 (() => {
   "use strict";
-  const TOOL_VERSION = "12";
+  const TOOL_VERSION = "13";
   const $ = (s, el = document) => el.querySelector(s);
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },

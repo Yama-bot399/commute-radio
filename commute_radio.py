@@ -40,7 +40,7 @@ from email.utils import format_datetime
 from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape
 
-TOOL_VERSION = "12"  # web/index.html と tools/daily.yml にも同じ番号を書く（食い違いを見つけるため）
+TOOL_VERSION = "13"  # web/index.html と tools/daily.yml にも同じ番号を書く（食い違いを見つけるため）
 socket.setdefaulttimeout(60)  # ネットワークが応答しないまま止まるのを防ぐ
 JST = dt.timezone(dt.timedelta(hours=9), "JST")
 HERE = Path(__file__).resolve().parent
@@ -179,6 +179,10 @@ def http_get(url: str, timeout: int = 20, retries: int = 2) -> bytes:
 
 TAG_RE = re.compile(r"<[^>]+>")
 URL_RE = re.compile(r"https?://\S+")
+GALLERY_RE = re.compile(r"^\W*画像\s*\d+\s*/\s*\d+\s*[>＞]?\s*")  # 「<画像1 / 6>」のような写真ページの印
+# 動画・テレビ番組の配信ページ（見出しだけで中身が分からず、いつの出来事かも分からないので使わない）
+VIDEO_SOURCE_RE = re.compile(r"TVer|YouTube|ニコニコ動画|TikTok|ABEMA", re.I)
+VIDEO_TITLE_RE = re.compile(r"見逃し(無料)?配信|動画見放題")
 
 
 def clean_text(s: str) -> str:
@@ -359,6 +363,7 @@ def parse_feed(data: bytes, is_google: bool) -> list[dict]:
             if summary.startswith(title[:15]):
                 summary = summary[len(title):].strip()
             summary = summary[:300]
+        title = GALLERY_RE.sub("", title).strip() or title
         published = None
         for key in ("published_parsed", "updated_parsed"):
             t = e.get(key)
@@ -389,7 +394,7 @@ def collect_news(cfg: dict, now: dt.datetime, recent_titles: list[str]) -> list[
             warn(f"「{genre['name']}」にキーワードもRSSもありません")
             continue
         raw: list[dict] = []
-        dropped = 0
+        dropped = videos = 0
         for url, is_google, kw in sources:
             try:
                 got = parse_feed(http_get(url), is_google)
@@ -397,6 +402,9 @@ def collect_news(cfg: dict, now: dt.datetime, recent_titles: list[str]) -> list[
                 warn(f"「{genre['name']}」の取得に失敗: {url[:80]} ({e})")
                 continue
             got = [it for it in got if not it["published"] or it["published"] >= since]
+            keep = [it for it in got if not (VIDEO_SOURCE_RE.search(it["source"] or "") or VIDEO_TITLE_RE.search(it["title"]))]
+            videos += len(got) - len(keep)
+            got = keep
             if genre["strict"]:
                 # 見出し・概要にキーワードが無い記事は、ジャンルと無関係とみなして外す
                 kws = [kw] if kw else genre["keywords"]
@@ -409,6 +417,8 @@ def collect_news(cfg: dict, now: dt.datetime, recent_titles: list[str]) -> list[
         raw.sort(key=lambda it: it["published"] or since, reverse=True)
         if dropped:
             log(f"「{genre['name']}」: キーワードを含まない{dropped}件を除外")
+        if videos:
+            log(f"「{genre['name']}」: 動画・番組の配信ページ{videos}件を除外")
         fresh = []
         for it in raw:
             if any(w in it["title"] for w in genre["exclude"]):
@@ -544,6 +554,10 @@ def _is_quota(msg: str) -> bool:
     return "429" in msg or "RESOURCE_EXHAUSTED" in msg
 
 
+NO_SEARCH_NOTE = ("\n\n# 注意（今回だけ）\n今回は Google 検索が使えません。「検索で確かめる」とある部分は、"
+                  "確かな事実が分からなければ触れないでください。日付・結果・数字を推測で言わないでください。")
+
+
 def ask_gemini(client, cfg: dict, prompt: str, *, json_mode: bool = False, use_search: bool = False) -> str:
     from google.genai import types
 
@@ -561,8 +575,10 @@ def ask_gemini(client, cfg: dict, prompt: str, *, json_mode: bool = False, use_s
                         kw["response_mime_type"] = "application/json"
                     if search:
                         kw["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+                    # 検索つきを頼んだのに検索なしで呼ぶときは、確かめられないことを言わないよう念を押す
+                    contents = prompt + (NO_SEARCH_NOTE if use_search and not search else "")
                     resp = client.models.generate_content(
-                        model=model, contents=prompt, config=types.GenerateContentConfig(**kw)
+                        model=model, contents=contents, config=types.GenerateContentConfig(**kw)
                     )
                     text = (resp.text or "").strip()
                     if not text:
@@ -651,7 +667,8 @@ def select_topics(client, cfg: dict, items: list[dict]) -> tuple[list[dict], boo
 - 候補は「ジャンル」の話題として集めたものだが、検索の都合で無関係な記事も混ざる。見出しがそのジャンルの話題だとはっきり分かるものだけ選び、少しでも怪しいものは選ばない（例: ジャンル「ベガルタ仙台」に将棋や他チームだけの話題）。合う候補が無いジャンルからは選ばなくてよい
 - 同じ出来事を扱う候補は1本だけ選ぶ
 - 新しく、具体的な事実（結果・数字・発表内容）があるものを優先する
-- 広告・まとめ記事・中身のない見出しは選ばない
+- 広告・まとめ記事・中身のない見出し、テレビ番組や動画の紹介ページ、写真だけのページは選ばない
+- 見出しの日付や内容から数日以上前の出来事だと分かるもの、いつの出来事か分からないものは選ばない（試合なら、いちばん新しい試合のものを選ぶ）
 
 # 候補（id | ジャンル | 日時 | 媒体 | 見出し | 概要）
 {cands}
@@ -777,8 +794,9 @@ def estimate_cpm(state: dict, cfg: dict) -> float:
 _PRIORITY_WEIGHT = {1: 0.7, 2: 1.0, 3: 1.5}
 
 
-def _segments(cfg: dict, topics: list[dict]) -> list[dict]:
-    """放送する順番（設定のジャンル順）に、ニュースの話題と紹介コーナーを並べる"""
+def _segments(cfg: dict, topics: list[dict], status: bool = False) -> list[dict]:
+    """放送する順番（設定のジャンル順）に、ニュースの話題と紹介コーナーを並べる。
+    status=True のときは、重要度「高」なのに新しい記事が無いジャンルも「最新の状況」として入れる"""
     enabled = [g for g in cfg["genres"] if g["enabled"]]
     segs, used = [], set()
     for gi, g in enumerate(enabled):
@@ -790,6 +808,8 @@ def _segments(cfg: dict, topics: list[dict]) -> list[dict]:
         used.update(id(t) for t in ts)
         if ts:
             segs.append({"genre": g, "corner": False, "topics": ts})
+        elif status and g["priority"] == 3:
+            segs.append({"genre": g, "corner": False, "topics": [], "status": True})
     rest = [t for t in topics if id(t) not in used]  # 念のため（どのジャンルにも当てはまらない話題は最後に）
     if rest:
         segs.append({"genre": None, "corner": False, "topics": rest})
@@ -803,6 +823,8 @@ def _budget_text(segs: list[dict], body: int) -> str:
         w = _PRIORITY_WEIGHT[g["priority"] if g else 2]
         if s["corner"]:
             items.append((f"{g['name']}の紹介コーナー", w * CORNER_WEIGHT))
+        elif s.get("status"):
+            items.append((f"{g['name']}の最新の状況", w))
         else:
             items += [(t["title"][:40], w) for t in s["topics"]]
     total = sum(w for _, w in items) or 1
@@ -831,6 +853,7 @@ def _expand_script(client, cfg: dict, lines: list, target: int, fmt: str, names:
 - 各話題で、背景・これまでの経緯・数字の意味・今後の予定・リスナーの暮らしや仕事への影響を足す（Google検索で確認できたことだけ。確認できないことは言わない）
 - 話し手の感想、身近な例への置き換え、ちょっとした雑談を足す。ただし同じことの繰り返しや水増しの相づちは入れない
 - 話題の順番・オープニング・エンディングの流れは変えない。新しいニュースは足さない
+- 出来事の時期（昨日・先週など）や試合の結果は変えない。確かめていない結果や体験談は足さない
 {keep}
 # 出力
 台本の本文だけ。{fmt}。見出し・ト書き・説明・空行は出力しない
@@ -855,9 +878,10 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
                  cpm: float | None = None, corner_history: dict | None = None) -> tuple[list, bool]:
     p = cfg["program"]
     a, b = p["hosts"]
-    segs = _segments(cfg, topics)
+    segs = _segments(cfg, topics, status=client is not None and cfg["gemini"]["use_search"])
     corners = [s["genre"] for s in segs if s["corner"]]
     cfg["_corner_picks"] = {}
+    cfg["_segments"] = segs
     if client is not None:
         cpm = cpm or CHARS_PER_MINUTE[cfg["tts"]["engine"]]
         target = int(p["target_minutes"] * cpm)
@@ -889,6 +913,11 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
             pr = PRIORITY_JA[g["priority"]] if g else "中"
             note = f" / 方針: {g['note']}" if g and g["note"] else ""
             blocks.append(f"\n## {name}（重要度: {pr}{note}）")
+            if s.get("status"):
+                blocks.append(
+                    "- 今日は新しい記事が見つかりませんでした。方針に沿って、いちばん新しい出来事（試合なら直近の試合の日付・相手・結果）と"
+                    "次の予定を Google 検索で確かめ、日付をそえて短く伝える。確かめられなければ、このジャンルは飛ばす"
+                )
             for t in s["topics"]:
                 blocks.append(
                     f"- 見出し: {t['title']}\n  媒体: {t['source'] or '不明'} / 日時: {_fmt_time(t['published'])}"
@@ -937,8 +966,11 @@ def write_script(client, cfg: dict, topics: list[dict], weather: dict | None, no
 {p['interest_note'] or '（特になし）'}
 
 # 守ること
-- 話題は下のニュースと紹介コーナーだけ。分からないことを推測で補わない。下に無い別のニュースを検索で見つけて付け足さない（下の話題の背景を検索で確かめて補足するのはよい）
+- 話題は下のニュースと紹介コーナーだけ。分からないことを推測で補わない。下に無い別のニュースを検索で見つけて付け足さない（下の話題の背景を検索で確かめて補足するのはよい。ジャンルの方針で頼まれている試合結果・次の予定などの定番の情報も、検索で日付まで確かめられたものなら短く伝えてよい）
 - 見出しの内容がそのジャンルと関係ないと分かったものは、その話題ごと飛ばす
+- それぞれの出来事がいつのことかをはっきりさせ、放送日から見て正しく言う（「昨日」「土曜日の試合」「先週の水曜日」など）。前の出来事を最近のことのように言わない。見出しの日時は記事が出た日時で、出来事の日とは限らない
+- 試合の勝敗・スコア・順位・記録などの結果は、見出しか Google 検索で確かめたものだけを言う。確かめられないときは結果に触れない
+- 出演者が自分で見た・行った・食べたなどの体験談は作らない（感想や意見はよい）
 {search_rule}{corner_rule}- 記事の文章をそのまま読まず、話し言葉で短く言い換える。媒体名は「河北新報によると」のように必要なときだけ
 - 耳で聞いて分かる文章にする。1回の発言は1〜3文、1文は短く。URL・記号・括弧・箇条書き・絵文字は使わない
 - 数字は聞き取りやすく言う（例: 2-1 は「2対1」、10/26 は「10月26日」）
@@ -1819,6 +1851,18 @@ def run(args, cfg: dict, site: Path, state: dict, now: dt.datetime) -> int:
             print(f"{p['hosts'][spk]['name']}: {t}")
         return 0
 
+    try:
+        chosen = {t["id"] for t in topics}
+        write_json(site / "debug.json", {
+            "time": now.isoformat(timespec="seconds"), "tool_version": TOOL_VERSION,
+            "candidates": [{"id": it["id"], "genre": it["genre"], "title": it["title"], "source": it["source"],
+                            "published": it["published"].astimezone(JST).isoformat(timespec="minutes") if it["published"] else None,
+                            "chosen": it["id"] in chosen} for it in items[:120]],
+            "status_genres": [s["genre"]["name"] for s in cfg.get("_segments") or [] if s.get("status")],
+            "corner_picks": picks,
+        })
+    except Exception as e:  # noqa: BLE001
+        log(f"debug.json を書けませんでした: {e}")
     audio, duration = synthesize(lines, cfg, client)
     cfg["_bgm_used"] = False
     try:
@@ -1840,12 +1884,15 @@ def run(args, cfg: dict, site: Path, state: dict, now: dt.datetime) -> int:
     same_day = any(e["date"][:10] == now.date().isoformat() for e in state["episodes"])
     title = f"{jp_date(now)}の{p['title']}" + (f"（{now:%H:%M}版）" if same_day else "")
     ep_topics = []  # 放送順（ニュースの話題と紹介コーナー）
-    for s in _segments(cfg, topics):
-        if s["corner"]:
+    for s in cfg.get("_segments") or _segments(cfg, topics):
+        if s["corner"] or s.get("status"):
             name = s["genre"]["name"]
-            if script_ai:
+            if script_ai and s["corner"]:
                 ep_topics.append({"genre": name, "title": picks.get(name) or f"{name}（紹介コーナー）",
                                   "source": "紹介コーナー", "link": "", "kind": "corner"})
+            elif script_ai:
+                ep_topics.append({"genre": name, "title": f"{name}の最新の状況", "source": "検索で確認",
+                                  "link": "", "kind": "status"})
         else:
             ep_topics += [{"genre": t["genre"], "title": t["title"], "source": t["source"], "link": t["link"]}
                           for t in s["topics"]]
@@ -1875,11 +1922,13 @@ def run(args, cfg: dict, site: Path, state: dict, now: dt.datetime) -> int:
         state["corners"].setdefault(name, []).append(item)
     minutes = f"{int(duration // 60)}分{int(duration % 60):02d}秒"
     n_corner = sum(1 for t in ep_topics if t.get("kind") == "corner")
+    n_status = sum(1 for t in ep_topics if t.get("kind") == "status")
     state["last_run"] = {
         "time": now.isoformat(timespec="seconds"),
         "result": "ok" if mode == "ai" else "fallback",
         "message": f"{minutes}、話題{len(topics)}本（候補{len(items)}件から選択）"
-                   + (f"＋紹介コーナー{n_corner}本" if n_corner else ""),
+                   + (f"＋紹介コーナー{n_corner}本" if n_corner else "")
+                   + (f"＋最新の状況{n_status}本" if n_status else ""),
         "warnings": WARNINGS[-10:],
     }
     try:
