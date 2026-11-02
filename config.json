@@ -129,12 +129,27 @@
         "宮城 ラーメン",
         "宮城 そば",
         "宮城 パスタ",
-        "宮城　海鮮"
+        "宮城　海鮮",
+        "お店の名前"
       ],
       "feeds": [],
       "exclude": [],
       "note": "宮城県内にある評価の高い食事の店を紹介して下さい",
       "kind": "news"
+    },
+    {
+      "name": "音楽",
+      "enabled": true,
+      "priority": 1,
+      "keywords": [
+        "フェス 宮城",
+        "フェス 東北"
+      ],
+      "feeds": [],
+      "exclude": [],
+      "note": "日本のバンド系のアーティストの話題\n",
+      "strict": true,
+      "kind": "corner"
     }
   ],
   "weather": {
