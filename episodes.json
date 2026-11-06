@@ -1,0 +1,493 @@
+{
+  "title": "通勤ラジオ",
+  "description": "毎朝届く、自分専用のニュース番組",
+  "feed": "https://yama-bot399.github.io/commute-radio/feed.xml",
+  "updated": "2026-11-07T05:46:33+09:00",
+  "tool_version": "13",
+  "notices": [],
+  "last_run": {
+    "time": "2026-11-07T05:46:33+09:00",
+    "result": "skipped",
+    "message": "作成しない曜日のためお休み"
+  },
+  "episodes": [
+    {
+      "id": "20261106-0549",
+      "title": "11月6日（金）の通勤ラジオ",
+      "date": "2026-11-06T05:49:13+09:00",
+      "file": "episodes/20261106-0549.mp3",
+      "script": "episodes/20261106-0549.txt",
+      "bytes": 1087680,
+      "duration": 136.0,
+      "mode": "fallback",
+      "chars": 720,
+      "engine": "gemini",
+      "rate_factor": 1.0,
+      "speech_minutes": 2.13,
+      "tool_version": "13",
+      "weather": "",
+      "topics": [
+        {
+          "genre": "ベガルタ仙台",
+          "title": "【ハワイアンズスタジアムいわき】2025 J2リーグ第17節 いわきFC Vs ベガルタ仙台 1-2で仙台勝利! Mediaset (mOQJncLgmC)",
+          "source": "Unisba Media",
+          "link": "https://news.google.com/rss/articles/CBMia0FVX3lxTE05cGd3T3FFZU9IOHFpMU43OGNwa2tEQmZ3aFdiS3IyLURDdy1GZVk0aUlWX2lPeE9vMTRXNFRXRjVTX2FVVzBOWDRxWVNFMTFxcEpwRG43Y3I2cnhXVWdrWXZ5ZWk0UWJCTUdV?oc=5"
+        },
+        {
+          "genre": "ベガルタ仙台",
+          "title": "【ネオベガルタ仙台】いわき戦後のあれこれ(森山監督の人望、踊るアオイ、踊らない梅木) Ospreys Vs Scarlets (ypLVaG3G6F)",
+          "source": "Unisba Media",
+          "link": "https://news.google.com/rss/articles/CBMiggFBVV95cUxPY1RaUktwSER5VUVfakdobk56VVFxMkQ1ZWhUbldiZE1uU1N2VXlqNURfenptamdWTk90WWlOa0ZKM1pfLUNCZHBKVWZmbTVJV2phZ3puN2RxT0VySXlhMzJTV1cxVDJNZE02S2JaaGpBUGR3Z2JiX29MQ0FxWTdPNFhB?oc=5"
+        },
+        {
+          "genre": "ベガルタ仙台",
+          "title": "【26/27J2「第15節」カターレ富山vsベガルタ仙台「徹底分析」】2位浮上・富山、「走る」「戦う」が伴うボール支配、選手層の厚さ...さらなる快進撃気配【戸塚啓のJ2のミカタ】(2) | 概要 | Jリーグ・国内 | ニュース",
+          "source": "サッカー批評Web",
+          "link": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9jSW5KRU1McEpwWHVRNllzYUtiaXFEbnBRcnVrb1BYWWw1Q0lzdEtuLXR4SlJDaDhvVmMtNnZNeTc2SmhqRzFFMERONHdoTXU0SXVjQVppSjZMUTA1QnlV?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "【無料・使い放題】MiniMaxの動画生成AI「H3」を開放 1文で音声付き動画、11/7(土) 0:59(日本時間)まで",
+          "source": "PR TIMES",
+          "link": "https://news.google.com/rss/articles/CBMiakFVX3lxTE1pQ0RmckFPWDFFb0dZN1p6ZnR2RkFxdzQ2dzNZb1F1aU04dUR4NnVMQ1ZKdXRsWWNnRDBSVzBKTlh0Si1oNzAydDNXWW83R2VQZU56NU9Pd181Rmc4dWdYMXNvUHB1RW0zV0E?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "キャパ、名古屋開催「TECH Biz EXPO 2026」に出展。生成AI×CADで製造・建設業の設計業務を効率化",
+          "source": "Infoseek",
+          "link": "https://news.google.com/rss/articles/CBMickFVX3lxTE41cXZENG9hWmpPbDY2SlZ0TDhHQnRSdjZZcW1mNmRSSVh4YVJ1M1JFU1BEVkQ5VkMzR25zeGFrYnE5YVFKUFI2R082VlBUWXlJdTdpMDNLS09yWFZXMU1BaU5BZTRVMWg5Qk9sUk1HV0dnUQ?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "生成AIによる営農・業務支援",
+          "source": "株式会社Preferred Networks",
+          "link": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBkWWU1bWk1MEdlTTBMN0tiY0tJSGNWWWxDSW9McHdGSUJaUDI3dVBUdnVDeFBJV0NnYnpicGlFMXROUVhRNi1XY2ttYVZaN3JsU3BoemE4a3gyOG9UT1hj?oc=5"
+        },
+        {
+          "genre": "宮城のおいしい店",
+          "title": "「ラーメンWalker宮城グランプリ」総合部門発表!1位は“懐かし系”中華そばが自慢のあの店",
+          "source": "ウォーカープラス",
+          "link": "https://news.google.com/rss/articles/CBMif0FVX3lxTE55QUFMOWRaV1VUekdFTWFDZnJPMWswZ3psaFROV3lSNmlMX0w1cWhaSHRvcHhoUWN0X0cwdE5EUDhDY0VGd1poNHhhNmFtNkVYRFA2WGtPTTJ2S1ptd2tOOENNcXFsNjlkbm1CQ1RFVEVPZUl3VFdpWTEtQ1ZYekE?oc=5"
+        }
+      ]
+    },
+    {
+      "id": "20261105-0552",
+      "title": "11月5日（木）の通勤ラジオ",
+      "date": "2026-11-05T05:52:23+09:00",
+      "file": "episodes/20261105-0552.mp3",
+      "script": "episodes/20261105-0552.txt",
+      "bytes": 2594496,
+      "duration": 324.3,
+      "mode": "ai",
+      "chars": 2024,
+      "engine": "gemini",
+      "rate_factor": 1.0,
+      "speech_minutes": 5.27,
+      "tool_version": "13",
+      "weather": "",
+      "topics": [
+        {
+          "genre": "ベガルタ仙台",
+          "title": "ベガルタ仙台 負傷離脱のDF五十嵐が実戦復帰「出たくてうずうずしていた」練習試合で復調アピール",
+          "source": "河北新報オンライン",
+          "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE83N24xX01SY0JBaFI3SVNUWFlTU1lXVWdxZWZPOFFKNjVfaWRIbXVqaHFqM2RobDlFbjctZ0hnS1hXOVRSLTlaZDFxR2JqX1RJQ1dEWi1aaTlpWnM?oc=5"
+        },
+        {
+          "genre": "ベガルタ仙台",
+          "title": "【26/27J2「第15節」カターレ富山vsベガルタ仙台「徹底分析」】上位対決で連敗中の仙台、スタメン入れ替えも...富山のボランチに支配される展開に【戸塚啓のJ2のミカタ】(1) | 概要 | Jリーグ・国内 | ニュース",
+          "source": "サッカー批評Web",
+          "link": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9vWlZBSWdDeVp6T0RwVEZzS2VXT01ER3ZwSjZubkJSZXRYU01JeXJURkdjUVcxZ0E2UTBVR2hUWHoxS2N2cFFfVGx6ckxHT2VMVGlkY0xNUU51YzN4a0JB?oc=5"
+        },
+        {
+          "genre": "ベガルタ仙台",
+          "title": "盟友との出会いでサッカーの楽しさを取り戻したベガルタ仙台・武田英寿。地元で戦う喜びを教えてくれた先輩の背中",
+          "source": "footballista",
+          "link": "https://news.google.com/rss/articles/CBMiVEFVX3lxTFBJLWtTdm95Ui1iS0ZnUTRaeWJkbWI1VVJwT0V4WjlmbkVtZUcxVk1Vc2ZFamd0R1pOdnlXZzl0amluT3JvVGY2RFFfemh4WnRnRWl4Rg?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "ジンベイ、数千件のデータで「自社専用の生成AI」をつくるファインチューニング・推論環境構築支援を開始",
+          "source": "Infoseek",
+          "link": "https://news.google.com/rss/articles/CBMickFVX3lxTE1kZ0xSVDdFcFF1bWwyZE9Wd0dMQmJJZWFjVXJfZUJJVV9NajMzbE0xSlpMYXp3OEJWUF9ObjhVMkRBTjJqODBENHBWT3VkN0M4WkYxT3RfWjR3T19BOFd2eWZhNHowc2k3U0FaYzEyaWJndw?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "裁判に生成AI どこまで...民事「迅速化」へ活用検討",
+          "source": "読売新聞",
+          "link": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE13Vk5lMENMSGNhRlQ0Ty1YS2ZwZjBONXl2Y1FQWmRtSmJ0dkRRTkJOWnlBMUVXX21Ecm90dllSZzdEMXAxd1lneEtnR01sTklsZ2hpczJSZ0R5bmctNmZONUgxTS1Hc2h2?oc=5"
+        },
+        {
+          "genre": "小説",
+          "title": "コンビニ人間（村田沙耶香）",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "猫",
+          "title": "猫が体を丸めて眠る理由と寒さ対策",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "宮城のおいしい店",
+          "title": "宮城の超人気ラーメン店が続々と新ブランドをオープン!新たな味わいを楽しもう",
+          "source": "ウォーカープラス",
+          "link": "https://news.google.com/rss/articles/CBMia0FVX3lxTE1Nd3VWRGQ3cW5yN1dfdEswTkJOUWJHSXVROUxIenZYYkJnTTNKLTFVWWdoZGxrX2tTdC13M0pjLWs1SWpROHAwd0IwOXJCVWpKYTUwWDdRczlPQzE4U29JMTFoS2pyaVZhR2Zz?oc=5"
+        },
+        {
+          "genre": "音楽",
+          "title": "back number",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        }
+      ]
+    },
+    {
+      "id": "20261104-0546",
+      "title": "11月4日（水）の通勤ラジオ",
+      "date": "2026-11-04T05:46:41+09:00",
+      "file": "episodes/20261104-0546.mp3",
+      "script": "episodes/20261104-0546.txt",
+      "bytes": 3936576,
+      "duration": 492.1,
+      "mode": "ai",
+      "chars": 2944,
+      "engine": "gemini",
+      "rate_factor": 1.0,
+      "speech_minutes": 8.07,
+      "tool_version": "13",
+      "weather": "",
+      "topics": [
+        {
+          "genre": "ベガルタ仙台",
+          "title": "ベガルタ仙台 富山の攻撃にリズム狂い、勢い出ずに首位陥落 監督「謙虚に貪欲に」巻き返し誓う",
+          "source": "河北新報オンライン",
+          "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE9LYlYxMEJJS21fbUVCc2xPUUJKLU1PSjh2cXdPX1FsRENFYVRPRjZ6SVBYeU4wUVluZGQzTHJKVzFnWEs2WDdMcDdIZVROTVhyWldNckl1amEtVDQ?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "自動生成AI技術を組み込む、遠隔画像診断支援サービスの全国展開でViewSend ICTとムトウが、業務提携。医療機関間連携とAI・自動化の社会実装を加速します。",
+          "source": "Excite エキサイト",
+          "link": "https://news.google.com/rss/articles/CBMidEFVX3lxTE5yeTUzSElta3lUb243RUs0eWZST0tIdjl5NVZ2SHZlaUdKWEowSEw5bm5VQVhJaU9XUHJqTzF6a1dwQ3NjTzJxMjlvNHdZS294ZGM1eVRhNXUtT19VMEplZ0RDQXlmRUZJd19sOFJyLTFlUGtO?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "国内医師の51%「治療法選択に生成AI活用」 デロイト調査",
+          "source": "日本経済新聞",
+          "link": "https://news.google.com/rss/articles/CBMibEFVX3lxTE9VTWt4R0tMRzZqNUFVWkM0MVROa2o1Q3AtVTA1MEptTXpsMFRLalZ2clhWT0QyNHk1dUhVbXM0VzFCaTBRQ3g5MmpTQUJTMkplUFAwNzluSi1BaEQydkhpU1RvYTdpSDRiY2x0Yg?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "公共交通計画に生成AI 日本2社が共同開発、試作版公開",
+          "source": "じゃかるた新聞",
+          "link": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE1rUWk4MjV5TlR5QW5mdWVGdlBLcjE3cjEyc2s1OWtZbmM0VVd2TE00bHdaVG16LWFPREVUUnh3bTdUNnptNnNvN3FHOEUzOGxhLU9KTUprV0dHYmlUbUE?oc=5"
+        },
+        {
+          "genre": "小説",
+          "title": "容疑者Xの献身（東野圭吾）",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "猫",
+          "title": "猫が前足を折りたたんで香箱座りをする理由",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "宮城のおいしい店",
+          "title": "「ラーメンWalker宮城グランプリ」新店部門発表!1位は”打ち立て麺”で味わうつけ麺が自慢の店",
+          "source": "ウォーカープラス",
+          "link": "https://news.google.com/rss/articles/CBMifEFVX3lxTE94STFFV2s0UW1sR2syektIRURKbHNzUUh1cmM0OUxYRXJIMG5USnVmRUZzVWEtYnZfaGlXMkROWkV0SmpVOTN5RTBROHY2RG10M2lRLVkwempWVFVHUHNaT2JjNnVUcWNxQlFMSjZCUTU4Q1lQVnBuR1hxMUQ?oc=5"
+        },
+        {
+          "genre": "音楽",
+          "title": "ELLEGARDEN",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        }
+      ]
+    },
+    {
+      "id": "20261103-0544",
+      "title": "11月3日（火）の通勤ラジオ",
+      "date": "2026-11-03T05:44:03+09:00",
+      "file": "episodes/20261103-0544.mp3",
+      "script": "episodes/20261103-0544.txt",
+      "bytes": 7457280,
+      "duration": 932.2,
+      "mode": "ai",
+      "chars": 5821,
+      "engine": "gemini",
+      "rate_factor": 1.0,
+      "speech_minutes": 15.4,
+      "tool_version": "13",
+      "weather": "",
+      "topics": [
+        {
+          "genre": "ベガルタ仙台",
+          "title": "ベガルタ仙台・DF高田、守備の立て直しを誓う 3日に富山戦",
+          "source": "河北新報オンライン",
+          "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1QcUhiYjFHM0t3cHFIZkRmMFRJZXlBY0FLdmVrbzhwTVBGX2hZdVprbUwycGR6SHVLLV82NXhQWkJ4N2lMMWRQWXMxVGJTak5zTXNGRTZYSWVPYTg?oc=5"
+        },
+        {
+          "genre": "ベガルタ仙台",
+          "title": "ベガルタ仙台 岩渕のスーパーゴールも大宮に敗れ今季初の2連敗 31日",
+          "source": "Excite エキサイト",
+          "link": "https://news.google.com/rss/articles/CBMibkFVX3lxTFAyT3RseHAzZ19SZXFTdEhEaFJ3UXdKT2lnQ3BNODlHeEw0MmNURmU3cWlQTUoyS0ZDR1hyWWZuV3VZVlJkWXVZVGpleUQ0RkJ3QWlWRkdFRUpOMUh3ZXhhb09KaUdFWjZzSlFoZ2hR?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "SBI証券とRidge-i、生成AIチャット『SBI証券チャットサポート』を10月30日提供開始! ログインの困りごとに対応",
+          "source": "AppBank",
+          "link": "https://news.google.com/rss/articles/CBMiakFVX3lxTE0wcFJkUFJqcVFHY3FuR3VDQngzdWJvYWxTeGhPRzA4bWRRS3VLcTU5X211SDVKS2VERVl2cmlSZ2tKSEhzSEJDSUVpbkpHZE5kVUxfOHplSUhxUkZXSmdROFRCS3NkY1lpZ2c?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "AIデータ社、生成AIの次は“人材配置最適化AI”- AI孔明 on IDXが変えるサービス業の生産性",
+          "source": "ニコニコニュース",
+          "link": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE0yUVUyampWRzBQN0pJanVIUXZYSWJBODJyaGRPZnpIRzRzaHBOYXkwVTVqS2J3MzBrSnhuanJhXzA0WTZWUUpmSkVvQVBhazNZc29yMQ?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "「このイラスト、生成AI?」PARAs AI、「クリエイターなら答えられる質問」の自動作成機能を追加",
+          "source": "Infoseek",
+          "link": "https://news.google.com/rss/articles/CBMickFVX3lxTFBEbDRtSGE0cDJIcExiOFdDWnQzQkx5RHZoWmQxbEFGMUpILWxnZjlmbDRzallPX3RETG1jLWJlVGxJTDJhVUpPTElYWWdmZmhTZFBFS1lXYjk2eUVXUVlEU2xVLU5kVUxWd1VzcUt2X1pFZw?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "【日本代表】ひつじに笑顔でまたがる森保監督「どがんして作ったとね」生成AIで年賀状作成体験",
+          "source": "日刊スポーツ",
+          "link": "https://news.google.com/rss/articles/CBMidkFVX3lxTE1BZ2xva0ROOVJKUVpvUTVJWWVqSnRqUFFoZW9qdlBsSURvVWlhclNEVVdkVEFRcFZCbExpckVqV19CdGRsam9jTEs0Rzk2VkRIVWdjSUhZU3Jla1Zobk03NllYNTlQVkhraWRxWExtUWdJandXSFHSAX5BVV95cUxNaVhLRmNHX205U191Rk5Yc3pXcFRGQzlIRnJsYlF2SVlERzU3ZjhKUzY0bE5LOWVYWllVOWxqZG5iRU05WkVQZHBZYzVic1Z1VmVLMVJJZkhySkJqV1pIUjFMWWtwRG1BcFRVYnpNR2xKSVMtbktGVmR4bUJsYUE?oc=5"
+        },
+        {
+          "genre": "小説",
+          "title": "舟を編む（三浦しをん）",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "猫",
+          "title": "猫のヒゲの驚くべきセンサー機能と感情表現",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "音楽",
+          "title": "MONKEY MAJIK",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        }
+      ]
+    },
+    {
+      "id": "20261102-0536",
+      "title": "11月2日（月）の通勤ラジオ",
+      "date": "2026-11-02T05:36:08+09:00",
+      "file": "episodes/20261102-0536.mp3",
+      "script": "episodes/20261102-0536.txt",
+      "bytes": 7354368,
+      "duration": 919.3,
+      "mode": "ai",
+      "chars": 5631,
+      "engine": "gemini",
+      "rate_factor": 1.0,
+      "speech_minutes": 15.19,
+      "tool_version": "12",
+      "weather": "",
+      "topics": [
+        {
+          "genre": "ベガルタ仙台",
+          "title": "ヒーローインタビュー 10月31日(土)放送分 ベガルタ仙台 梅木翼|スポーツ|見逃し無料配信はTVer!人気の動画見放題",
+          "source": "TVer",
+          "link": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE5ETlllVUNyeDR0RS1vVkVQc3gzbjRpRzhCcFU5OVBvejlhbzhzRGVYSDM3WDhzS1pqcHQ1c2duNGRPSm9fenFzU1JQWQ?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "〔寄り道〕生成AI利用率50%、うち4割が課金",
+          "source": "NNAアジア",
+          "link": "https://news.google.com/rss/articles/CBMiRkFVX3lxTE0zVy14X3UzZWx2ZGZTWGE1dUIxZFJSa1A1aTZjbUF3Nkd3aS12V1pER216VGg0UjN6NFk2bGpXMVpxY1BVZXc?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "松山駅で生成AIアバターが案内 JTBと連携で実証実験",
+          "source": "観光経済新聞",
+          "link": "https://news.google.com/rss/articles/CBMiVEFVX3lxTFBXNWRLM1N4ME1rRFpHV0xWYTNpbEtVSW9PMFNtRmwwY29xZTJjZjAybjdvTHhBZ3U4MG9FQnR5VWt5aTlzeUgxRE9XQ2kxZkZCVHBtVA?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "NEWh、生成AI時代の事業構想・推進人材を育成する「事業構想ブートキャンプ」を提供開始",
+          "source": "Excite エキサイト",
+          "link": "https://news.google.com/rss/articles/CBMic0FVX3lxTE5mdWpiUEhyT3ZpOU9oSTZBRWpoQi1ldkJlNzJyV0ptTjMzVzRVNTUyei1NUXg4bTBQcnNlRE5pWTlrbXNRUk5panJhdm4xOUZuZVlOX1VXS1dGaENiRU1oZktQSmZIN2IyQXA3djVLZUdKazg?oc=5"
+        },
+        {
+          "genre": "小説",
+          "title": "ゴールデンスランバー（伊坂幸太郎）",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "猫",
+          "title": "猫のゴロゴロ音の周波数と癒やし効果",
+          "source": "紹介コーナー",
+          "link": "",
+          "kind": "corner"
+        },
+        {
+          "genre": "宮城のおいしい店",
+          "title": "画像1 / 6>「ラーメンWalker宮城グランプリ」総合部門発表!1位は“懐かし系”中華そばが自慢のあの店",
+          "source": "ウォーカープラス",
+          "link": "https://news.google.com/rss/articles/CBMif0FVX3lxTE55QUFMOWRaV1VUekdFTWFDZnJPMWswZ3psaFROV3lSNmlMX0w1cWhaSHRvcHhoUWN0X0cwdE5EUDhDY0VGd1poNHhhNmFtNkVYRFA2WGtPTTJ2S1ptd2tOOENNcXFsNjlkbm1CQ1RFVEVPZUl3VFdpWTEtQ1ZYekE?oc=5"
+        },
+        {
+          "genre": "宮城のおいしい店",
+          "title": "<画像6 / 8>宮城を代表するラーメンの名店が移転&パワーアップ!さらなる進化を見逃すな",
+          "source": "ウォーカープラス",
+          "link": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9kRThzcC1tNTJOU0JuTGlhelNzZlNmYk5ITnBDLVlqQVBiQWxXOExtVGhoRmw4bVdFUmEyMEtyZjNiU08tUFpFVHk3S0pVR0NENzVyU25YVFl0YnRSREg4b012eUhNZlRHUWhj?oc=5"
+        }
+      ]
+    },
+    {
+      "id": "20261101-1139",
+      "title": "11月1日（日）の通勤ラジオ",
+      "date": "2026-11-01T11:39:26+09:00",
+      "file": "episodes/20261101-1139.mp3",
+      "script": "episodes/20261101-1139.txt",
+      "bytes": 8002752,
+      "duration": 1000.3,
+      "mode": "ai",
+      "chars": 6337,
+      "engine": "gemini",
+      "rate_factor": 1.0,
+      "speech_minutes": 16.54,
+      "tool_version": "12",
+      "weather": "",
+      "topics": [
+        {
+          "genre": "ベガルタ仙台",
+          "title": "【詳しい記事が入りました】ベガルタ仙台、守備にほころび 大宮に競り負け今季初の2連敗、ホーム黒星",
+          "source": "河北新報オンライン",
+          "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1pRXFhcDZjVUpsMHo0TXNBWkNrUkxEWkhXSWJCMkNzM1hoME5LVWF1Q3loRE1xaWxKX2FLenU4QzZmQjJuTy1KNkVhaFgxVGloV3p6U1B6U2JmLU0?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "定期観光バスで“多言語”観光案内 生成AI使った「音声ガイド」を開発 北海道中央バスとTISI",
+          "source": "au Webポータル",
+          "link": "https://news.google.com/rss/articles/CBMibkFVX3lxTE1Rd2s2NEMyTG8xc3VxM3pkVDdPeUhkS0pvVExkMlFPU1FfWUVIaFF1RHdDUElvbHZMLVpKWGw0Um8ySTM1VkRzM0lQOVZfb1JXRDctQ0RFVXJLOWVNYnhpWFVYN1hORWJEY2pBN1NB?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "「AIを使える職員に仕事が集中」 政府の生成AI調査に負担増の声も",
+          "source": "千葉テレビ放送株式会社",
+          "link": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE9VdWlLVnlQY0QyTWszSnpSaDFXaTVZYzdzSi14R3V2WmNLX3hNUUF3QUVfV3liQWY5dmNYcF9VdWhXZVFrZFhEX2pKVmxYLUZTUnc2ZkpCSlFrVUNqdzZTeERIY18?oc=5"
+        },
+        {
+          "genre": "小説",
+          "title": "THE RAMPAGE 岩谷翔吾、最新作はダンス小説! タイトルの『一人分の夜を生き直す』に「最も表現したかった部分が込められている」映画化決定の『選択』に続く2作目",
+          "source": "TOKYO HEADLINE",
+          "link": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE5RcWVQQ1RoZjZjc2dRV0t5YUtuVFZ0ZVRLZjBYS25LQklsOFdwSFJCS2NsTml3N2VCWFREQzd6YVJuOXZGRjNRZUNwUG45Zw?oc=5"
+        },
+        {
+          "genre": "小説",
+          "title": "読書家・姫野和樹のラグビー人生を変えた一冊 感銘を受けた「リーダーシップと、生き方を曲げない信念」(webスポルティーバ)",
+          "source": "Yahoo!ニュース",
+          "link": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNVTBMWTdoZHlILWtFcWhUZ2tRSXBWN0ZuckRubXAzVEJtT2NTMExOVzF0MGotaEdIQk5pZDd6ODJ3cjlHSjktazlLSnZGOU5qbEV4dlJtYXMwc1NWWFQxQ1c4WTl3cXBNTFNyMWZKWm1pZGNJLUtRMUNDVmtZczhVNlNzdFl2QkNP?oc=5"
+        },
+        {
+          "genre": "猫",
+          "title": "「風呂に入ろうとしたら先客がいた」浴槽のふたに座って動かない猫 「やんのかステップの構え」にクスッ(LIMO)",
+          "source": "Yahoo!ニュース",
+          "link": "https://news.google.com/rss/articles/CBMif0FVX3lxTE5rRGFjTW1kSUFYRG91blFKdnVzNUdqaWJVTzlic25LZ1g1M1NFd3BTRExvcFlyTGVLOVQ3OGU2OHV4N2FwYzIyckNaei11MTVKQ3p3ZXlUMno0U2pDaWR5Z1NyeF9LaDhjczJheERvTm80S2RaTl9OYTdZUGR6S0U?oc=5"
+        },
+        {
+          "genre": "宮城のおいしい店",
+          "title": "<画像5 / 6>「ラーメンWalker宮城グランプリ」新店部門発表!1位は独特の香ばしさが魅力の店",
+          "source": "ウォーカープラス",
+          "link": "https://news.google.com/rss/articles/CBMif0FVX3lxTE9CRlg1VEVQNl9qdl9NSVlKLTlyb3Nacm5sa1JCbXBYVl9jVmJUYVNmbUh6MWhsY2hVWS02ejUxZFMwWEx0UF9XdF8wRm9UWHVvTlRkMkRZWWx1WE1qUDkwU1N2anN0YjBvaVpGNkR5ZVhxTG51MU9JVl9NbkpSUDg?oc=5"
+        },
+        {
+          "genre": "宮城のおいしい店",
+          "title": "<画像4 / 6>鶏の濃厚な旨味にハマる!ラーメンWalker宮城が注目する鶏そばの新店3選",
+          "source": "ウォーカープラス",
+          "link": "https://news.google.com/rss/articles/CBMibkFVX3lxTE9FRTZPcFYzMk5BczZuZ29GTDBYN2hmZGlURWJfZGNTTXhpYlh5ZGpIVndjdjZmdWV3VjROTk5WXzBjRGRFblJKWF8tZE13UkZ6d2FkLXZPdFhhX3FvdElNb0RJSHlBVFBqakxzalJR?oc=5"
+        }
+      ]
+    },
+    {
+      "id": "20261030-0732",
+      "title": "10月30日（金）の通勤ラジオ（07:32版）",
+      "date": "2026-10-30T07:32:34+09:00",
+      "file": "episodes/20261030-0732.mp3",
+      "script": "episodes/20261030-0732.txt",
+      "bytes": 8868480,
+      "duration": 1108.6,
+      "mode": "ai",
+      "chars": 7303,
+      "engine": "gemini",
+      "rate_factor": 1.0,
+      "speech_minutes": 18.34,
+      "weather": "",
+      "topics": [
+        {
+          "genre": "ベガルタ仙台",
+          "title": "J2首位に立つベガルタ仙台 レジェンド梁勇基さんに好調の要因を聞く",
+          "source": "Excite エキサイト",
+          "link": "https://news.google.com/rss/articles/CBMibkFVX3lxTE1LMEtwQUxKQ3RBbk91aENqWDRWak1WSGJVSHR5bnFaRlNzS1ZyLTN4XzhzWDkwT0twMUViZzJhRXFIZDVvN3ZOVGJyWWkwTzN2MElMTVV1VTlGUFBqQTBhYW5Wc01XalJsLWt1cEhB?oc=5"
+        },
+        {
+          "genre": "ベガルタ仙台",
+          "title": "ベガルタ仙台 MF岩渕チャンスメークで攻撃活性化 ヤマ場の31日ホーム大宮戦は得点にも意欲",
+          "source": "河北新報オンライン",
+          "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE02Q0FDSGN1NlhuMEE3WWxnVjZ4Tl8yTHZ3UzNaQjFZRmRZM3hTMXZ1THlfN3M2VTllZEJJSlRubTVOekFZbUo1QzB3QlhLLUdPcDNOT2ZzenNvclU?oc=5"
+        },
+        {
+          "genre": "ベガルタ仙台",
+          "title": "元ベガルタ仙台の大久保さんがタイのサッカー少年21人とユアスタ観戦 仙台―バンコク線の運航再開を草の根から後押し",
+          "source": "河北新報オンライン",
+          "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1jTmFJdVFtR2N5Y1JXRG54OHliX0hCeW9LQXRmZjNFdWlwVnE1Z1ZpOV9YWUZGZjlLVmdoQ3Jody1qVllZaDBSOWxwXzczY3Q0UjBnREFCV3dWRTQ?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "Canvaが独自の画像生成AI「Craft」を公開、構図を設計してから画像を生成",
+          "source": "株式会社マイナビ",
+          "link": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE1JNEpYRDFZTElQREJjU0ludXJzR21paTM5QlJxTUgwRmlEZ3VvRmI4NS1aTEdTUVdzREFvdlhxcHRBeG91cEttb3pRVUtWTTlJRTZvR0Qya3hiVWlWWGln?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "現場を省力化する生成AI活用術、書類読解や資料作成のノウハウ4選",
+          "source": "日経クロステック",
+          "link": "https://news.google.com/rss/articles/CBMibEFVX3lxTE5kbzdxei0xaTJHVTVUWGRYQWUtVGNmQXVqdmhLZkZ1MUJrUVdPNHlFNElfeDRSYzZFQ1BuOTk3WFVMNWVodGUwNml0NGZhRkRZbnZFSFAxcjZ0aGNLUWg2LXNQXzVFVGtidkUydg?oc=5"
+        },
+        {
+          "genre": "AI",
+          "title": "LINEヤフーコミュニケーションズ、生成AI前提の運営モデルへ転換。生成AI・自動化と業務改善により、年36万時間相当の業務拡大に対応",
+          "source": "Infoseek",
+          "link": "https://news.google.com/rss/articles/CBMickFVX3lxTE9qTU9EMEQ2TEc4bkN1VXJMaDJ5Smh0RUhxTENyeWZLbHYzamFFVksyWVI4RUFRMkZXR0phT2hoUjVFQktTc3V0TllsNmZHRlozQ00xUGFWdnVpVXRwUVVNZ1Z4c3hBb2s1Vkd5ZmhSaXc4dw?oc=5"
+        },
+        {
+          "genre": "小説",
+          "title": "徳間書店史上最多の22言語に翻訳された小説『純喫茶トルンカ』が待望のコミカライズ! 電子コミックスを2巻同時発売",
+          "source": "ニコニコニュース",
+          "link": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE83Z1FHUGRXaXhjYVBmY2lJOU5PNEwwMmJyaGxsZnJqTDFzX2pjalhkdVFlQnVBOHRMT0pEbGJKeFFUZnNNdExzY0M2RFAyQnpzMVJteDc4NjdqcU1fSmc2ODlIc0s4WkhX?oc=5"
+        },
+        {
+          "genre": "猫",
+          "title": "「バレテニャイ」薬を飲んだフリする猫 ごまかしきれていない顔に「声出して笑った」(LIMO)",
+          "source": "Yahoo!ニュース",
+          "link": "https://news.google.com/rss/articles/CBMif0FVX3lxTE02bkRoMldhRmVTTjNzaWdlTEJuWVBjSVdPeHdaVEVvNW9PQV9yZXpCUV8zT2h5d3Vob2IwTFBQQ1NpZkRIYzBaSllHX050cjFHRkZqTEVuUWVnV2pDcWJPQi1ULVE4cmRkVkRvd3ZNdUV0U0VmZC1vUlBkOVNEMlU?oc=5"
+        }
+      ]
+    }
+  ]
+}

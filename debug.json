@@ -1,0 +1,144 @@
+{
+  "time": "2026-11-06T05:49:13+09:00",
+  "tool_version": "13",
+  "candidates": [
+    {
+      "id": "g1-1",
+      "genre": "ベガルタ仙台",
+      "title": "【サガンティーナ】2025ウェルカムダンスパフォーマンス第1節🆚ベガルタ仙台&第3節🆚FC今治 La Verità (cfeQ5YIiDE)",
+      "source": "Unisba Media",
+      "published": "2026-11-05T20:09+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g1-2",
+      "genre": "ベガルタ仙台",
+      "title": "【ハワイアンズスタジアムいわき】2025 J2リーグ第17節 いわきFC Vs ベガルタ仙台 1-2で仙台勝利! Mediaset (mOQJncLgmC)",
+      "source": "Unisba Media",
+      "published": "2026-11-05T06:04+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g1-3",
+      "genre": "ベガルタ仙台",
+      "title": "【26/27J2「第15節」カターレ富山vsベガルタ仙台「徹底分析」】2位浮上・富山、「走る」「戦う」が伴うボール支配、選手層の厚さ...さらなる快進撃気配【戸塚啓のJ2のミカタ】(2) | 概要 | Jリーグ・国内 | ニュース",
+      "source": "サッカー批評Web",
+      "published": "2026-11-05T05:30+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g1-4",
+      "genre": "ベガルタ仙台",
+      "title": "【ネオベガルタ仙台】いわき戦後のあれこれ(森山監督の人望、踊るアオイ、踊らない梅木) Ospreys Vs Scarlets (ypLVaG3G6F)",
+      "source": "Unisba Media",
+      "published": "2026-11-04T21:22+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g2-1",
+      "genre": "AI",
+      "title": "【生成AI時代のBtoB購買を5段階で可視化】IDEATECH、パーフェクトガイド「AI時代のBtoBバイヤージャーニ",
+      "source": "ニコニコニュース",
+      "published": "2026-11-06T01:21+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-2",
+      "genre": "AI",
+      "title": "〔ポッサムのつぶやき〕生成AIが思考力奪う?学校での利用制限へ",
+      "source": "NNAアジア",
+      "published": "2026-11-06T00:00+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-3",
+      "genre": "AI",
+      "title": "現代製鉄、生成AIでAXを加速",
+      "source": "NNAアジア",
+      "published": "2026-11-06T00:00+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-4",
+      "genre": "AI",
+      "title": "生成AIが選ぶ「脱毛クリニック」、1位はエミナルクリニック(言及率95.2%)【2026年10月調査】",
+      "source": "ニコニコニュース",
+      "published": "2026-11-05T23:21+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-5",
+      "genre": "AI",
+      "title": "‍‍‍AIヘンタイ画像生成 ai",
+      "source": "Universitat de Barcelona",
+      "published": "2026-11-05T23:06+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-6",
+      "genre": "AI",
+      "title": "‍‍‍AI彼女生成 ai",
+      "source": "Universitat de Barcelona",
+      "published": "2026-11-05T23:06+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-7",
+      "genre": "AI",
+      "title": "‍‍‍AIアニメ生成 - 無料でAIがアニメーションを生成 ai",
+      "source": "Universitat de Barcelona",
+      "published": "2026-11-05T23:06+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-8",
+      "genre": "AI",
+      "title": "‍‍‍成人向けAI画像生成 ai",
+      "source": "Universitat de Barcelona",
+      "published": "2026-11-05T23:02+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-9",
+      "genre": "AI",
+      "title": "‍‍‍AIポルノ生成 ai",
+      "source": "Universitat de Barcelona",
+      "published": "2026-11-05T23:01+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-10",
+      "genre": "AI",
+      "title": "生成AIによる営農・業務支援",
+      "source": "株式会社Preferred Networks",
+      "published": "2026-11-05T22:37+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g2-11",
+      "genre": "AI",
+      "title": "キャパ、名古屋開催「TECH Biz EXPO 2026」に出展。生成AI×CADで製造・建設業の設計業務を効率化",
+      "source": "Infoseek",
+      "published": "2026-11-05T22:10+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g2-12",
+      "genre": "AI",
+      "title": "【無料・使い放題】MiniMaxの動画生成AI「H3」を開放 1文で音声付き動画、11/7(土) 0:59(日本時間)まで",
+      "source": "PR TIMES",
+      "published": "2026-11-05T21:56+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g5-1",
+      "genre": "宮城のおいしい店",
+      "title": "「ラーメンWalker宮城グランプリ」総合部門発表!1位は“懐かし系”中華そばが自慢のあの店",
+      "source": "ウォーカープラス",
+      "published": "2026-11-05T01:33+09:00",
+      "chosen": true
+    }
+  ],
+  "status_genres": [],
+  "corner_picks": {}
+}
