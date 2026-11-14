@@ -1,0 +1,156 @@
+{
+  "time": "2026-11-13T05:49:23+09:00",
+  "tool_version": "13",
+  "candidates": [
+    {
+      "id": "g1-1",
+      "genre": "ベガルタ仙台",
+      "title": "練習フォトレポート66枚(11/11)【J2】第17節 vs ベガルタ仙台:「東北一熱いチームを目指す」と吉田謙監督。全員が自己ベストを更新する熱量で挑む",
+      "source": "タグマ!",
+      "published": "2026-11-12T21:54+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g1-2",
+      "genre": "ベガルタ仙台",
+      "title": "J2試合成績:モンテディオ山形vsベガルタ仙台 2026年10月11日【スパイア】",
+      "source": "SPAIA",
+      "published": "2026-11-11T19:53+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-1",
+      "genre": "AI",
+      "title": "最高検が生成AIの捜査などへの使用で指針 全国の検察庁に周知",
+      "source": "NHKニュース",
+      "published": "2026-11-13T05:25+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-2",
+      "genre": "AI",
+      "title": "総務省が新しい無料オンライン講座「統計解析プログラミング」を1月に開講 Pythonでのデータ分析が4週間で学べる",
+      "source": "ITmedia",
+      "published": "2026-11-13T05:00+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-3",
+      "genre": "AI",
+      "title": "最新の画像生成AI「Seedream 5.5」がPOPPIXSに登場!サブスク会員は期間限定で生成無制限",
+      "source": "Infoseek",
+      "published": "2026-11-13T00:10+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-4",
+      "genre": "AI",
+      "title": "通関書類の突合作業が、30分から5分に。生成AI-OCR「なんでも読めるくん(R)」に新機能「DocuMatch(R)」を搭載",
+      "source": "Infoseek",
+      "published": "2026-11-12T23:10+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g2-5",
+      "genre": "AI",
+      "title": "「AI検索対策ガイド」をCINCが無料公開!生成AIにどう語られているかの診断から施策選定、KPIによる改善まで全87ページで解説",
+      "source": "Infoseek",
+      "published": "2026-11-12T22:10+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-6",
+      "genre": "AI",
+      "title": "生成AIにより本人訴訟増加!? 企業はどう備えるべきか(オンライン)",
+      "source": "労働新聞社",
+      "published": "2026-11-12T21:36+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-7",
+      "genre": "AI",
+      "title": "【特許出願中】複数の生成AI合議による多言語AI見守りアプリ「こころチャット」、App Store「9+」・Google Play「対象年齢9歳以上」で審査を通過し、一般公開へ向け始動",
+      "source": "PR TIMES",
+      "published": "2026-11-12T20:51+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-8",
+      "genre": "AI",
+      "title": "ウェビナー開催のお知らせ【実践】生成AI時代の「声」を、業務で安心して使うために",
+      "source": "ニコニコニュース",
+      "published": "2026-11-12T19:21+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-9",
+      "genre": "AI",
+      "title": "GDCレポート:ゲーム開発者の40%が仕事で生成AIを利用",
+      "source": "Mezha.net",
+      "published": "2026-11-12T19:07+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-10",
+      "genre": "AI",
+      "title": "世界のAIデータセンターネットワーキング市場、2034年に1,187億米ドルへ拡大予測|年平均成長率21.5%、生成AIと800G高速通信が成長を牽引",
+      "source": "PR TIMES",
+      "published": "2026-11-12T18:58+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-11",
+      "genre": "AI",
+      "title": "「生成AIを導入したのに成果が出ない」を変える――精度・ガバナンス・コストを1か所で管理するAIゲートウェイ『Conn",
+      "source": "ニコニコニュース",
+      "published": "2026-11-12T18:45+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g2-12",
+      "genre": "AI",
+      "title": "医師向け生成AIチャットサービス「medimo AIチャット」提供開始 medimo、スズケン",
+      "source": "医薬通信社",
+      "published": "2026-11-12T18:33+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g5-1",
+      "genre": "宮城のおいしい店",
+      "title": "【名古屋】ドン・キホーテ栄本店内の完全屋内BBQ場に宮城県産の大粒牡蠣と海鮮が楽しめる浜焼きBBQサカバコースが誕生。",
+      "source": "ニコニコニュース",
+      "published": "2026-11-12T20:21+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g5-2",
+      "genre": "宮城のおいしい店",
+      "title": "ラーメンWalker宮城おすすめ!本場の”煮干しラーメン”が堪能できる店2選",
+      "source": "ウォーカープラス",
+      "published": "2026-11-12T18:01+09:00",
+      "chosen": false
+    },
+    {
+      "id": "g5-3",
+      "genre": "宮城のおいしい店",
+      "title": "宮城のラーメン王子も感動!京都が生んだ美フォルムの麺を堪能できる「らぁ麺 たか樹」",
+      "source": "Walker Plus",
+      "published": "2026-11-12T06:17+09:00",
+      "chosen": true
+    },
+    {
+      "id": "g5-4",
+      "genre": "宮城のおいしい店",
+      "title": "「ラーメンWalker宮城グランプリ」新店部門発表!1位は”打ち立て麺”で味わうつけ麺が自慢の店",
+      "source": "ウォーカープラス",
+      "published": "2026-11-11T22:11+09:00",
+      "chosen": true
+    }
+  ],
+  "status_genres": [],
+  "corner_picks": {
+    "小説": "夜は短し歩けよ乙女（森見登美彦）",
+    "猫": "猫がフミフミと前足で毛布や飼い主を踏む「ミルク踏み」の行動と子猫時代の名残",
+    "音楽": "スピッツ"
+  }
+}
