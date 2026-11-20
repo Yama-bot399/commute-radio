@@ -1,0 +1,161 @@
+name: 通勤ラジオを作成
+# commute-radio-version: 12
+# ↑ この行は消さないでください（設定画面の「状態チェック」が、このファイルが最新かどうかを見るのに使います）
+
+on:
+  schedule:
+    # 毎日 5:07（日本時間）に起動します。UTCで書くので「20:07 UTC = 翌5:07 JST」。
+    # 番組を作る曜日は設定画面（config.json の days）で選べます。時刻を変えたいときはこの行を編集。
+    - cron: "7 20 * * *"
+  workflow_dispatch: # 手動実行（Actions画面の Run workflow / 設定画面の「今すぐ番組を作る」）
+    inputs:
+      voice_sample:
+        description: "番組は作らず、この声の試聴用の見本だけ作る（例: Kore。空欄なら番組を作る）"
+        required: false
+        default: ""
+      site_only:
+        description: "番組は作らず、番組ページ（設定画面）だけ更新する"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write # 番組の公開（gh-pages）と、アップロードされた更新ファイルの反映のため
+  actions: write # 定期実行が自動停止されないようにするため
+
+concurrency:
+  group: commute-radio
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 更新ファイル（commute-radio-○○.zip）があれば反映
+        env:
+          UPDATE_NOTE_FILE: ${{ runner.temp }}/commute_update.json
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, re, subprocess, time, zipfile
+          root, msgs = pathlib.Path("."), []
+          mark = lambda t: int((re.findall(r"commute-radio-version:\s*(\d+)", t) or ["0"])[0])
+          git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True)
+          zips = [p for p in root.rglob("*.zip") if ".git" not in p.parts and p.name.lower().startswith("commute-radio")]
+          if zips:
+              z = max(zips, key=lambda p: int((re.findall(r"\d+", p.stem) or ["0"])[0]))
+              try:
+                  with zipfile.ZipFile(z) as zf:
+                      names = [n for n in zf.namelist() if not n.endswith("/")]
+                      mains = [n for n in names if n.split("/")[-1] == "commute_radio.py"]
+                      if not mains:
+                          raise ValueError("commute_radio.py が入っていません")
+                      prefix = min(mains, key=len)[: -len("commute_radio.py")]
+                      changed, old_workflow = [], False
+                      for n in names:
+                          rel = n[len(prefix):] if n.startswith(prefix) else ""
+                          parts = pathlib.PurePosixPath(rel).parts
+                          if not parts or ".." in parts or "__MACOSX" in parts or parts[-1] == ".DS_Store" or rel == "config.json":
+                              continue  # config.json（自分の設定）は上書きしない
+                          data, dst = zf.read(n), root / rel
+                          if parts[0] == ".github":  # ワークフローはこの仕組みでは書き換えられない（GitHub の制限）
+                              if parts[-1] == "daily.yml" and dst.exists():
+                                  old_workflow = mark(dst.read_text(encoding="utf-8", errors="ignore")) < mark(data.decode("utf-8", "ignore"))
+                              continue
+                          if dst.exists() and dst.read_bytes() == data:
+                              continue
+                          dst.parent.mkdir(parents=True, exist_ok=True)
+                          dst.write_bytes(data)
+                          changed.append(rel)
+                  v = re.search(r'TOOL_VERSION = "([^"]+)"', (root / "commute_radio.py").read_text(encoding="utf-8"))
+                  msgs.append(f"更新ファイル {z.name} を反映しました（v{v.group(1) if v else '?'}・変わったファイル{len(changed)}個）")
+                  if old_workflow:
+                      msgs.append("daily.yml だけは自動では新しくできません。設定タブの「状態チェック」の案内で新しくしてください")
+                  for p in zips:
+                      p.unlink()
+                  git("config", "user.name", "github-actions[bot]")
+                  git("config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
+                  git("add", "-A")
+                  git("commit", "-q", "-m", f"ツールを更新（{z.name} から）")
+                  ref = os.environ.get("GITHUB_REF_NAME") or "main"
+                  for i in range(3):
+                      if git("push", "-q", "origin", f"HEAD:{ref}").returncode == 0:
+                          break
+                      time.sleep(5)
+                      git("pull", "-q", "--rebase", "origin", ref)
+                  else:
+                      msgs.append("新しいファイルを GitHub に保存できませんでした（今回は新しい版で作ります。次回もう一度保存します）")
+              except Exception as e:
+                  msgs.append(f"更新ファイル {z.name} を反映できませんでした（{e}）。ダウンロードし直して、もう一度アップロードしてください")
+          for m in msgs:
+              print(m)
+          pathlib.Path(os.environ["UPDATE_NOTE_FILE"]).write_text(json.dumps({"messages": msgs}, ensure_ascii=False), encoding="utf-8")
+          PY
+
+      - name: ライブラリをインストール
+        run: pip install -r requirements.txt
+
+      - name: 公開中のサイトを取得
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          rc=1
+          for _ in 1 2 3; do
+            rc=0; git ls-remote --exit-code --heads "$url" gh-pages > /dev/null 2>&1 || rc=$?
+            if [ "$rc" = 0 ] || [ "$rc" = 2 ]; then break; fi
+            sleep 10
+          done
+          if [ "$rc" = 2 ]; then
+            echo "gh-pages ブランチがまだ無いので新しく作ります"
+            mkdir -p site
+          elif [ "$rc" = 0 ]; then
+            for _ in 1 2 3; do
+              if git clone --quiet --depth 1 --branch gh-pages "$url" site; then break; fi
+              rm -rf site; sleep 10
+            done
+            # 取得できないまま進むと、これまでの回が消えてしまうので止める
+            if [ ! -d site/.git ]; then echo "::error::公開中のサイトを取得できませんでした（時間をおいてもう一度実行してください）"; exit 1; fi
+            rm -rf site/.git
+          else
+            echo "::error::GitHub に接続できませんでした（時間をおいてもう一度実行してください）"; exit 1
+          fi
+
+      - name: 番組を作成
+        id: make
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+          VOICE_SAMPLE: ${{ github.event.inputs.voice_sample || '' }}
+          SITE_ONLY: ${{ github.event.inputs.site_only == 'true' && '1' || '' }}
+          UPDATE_NOTE_FILE: ${{ runner.temp }}/commute_update.json
+          TIME_BUDGET_MIN: "44" # timeout-minutes より短く
+        run: python commute_radio.py --site-dir site
+
+      - name: サイトを公開（gh-pages）
+        # 作成に失敗したときも公開する（番組ページに失敗の理由を表示するため。それまでの回はそのまま残る）
+        if: ${{ always() && (steps.make.outcome == 'success' || steps.make.outcome == 'failure') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd site
+          git init --quiet -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit --quiet -m "番組を更新 $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M')"
+          # 履歴を残さず最新の状態だけを置く（古い音声でリポジトリが膨らまないように）
+          git push --quiet --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+
+      - name: 定期実行の自動停止を防ぐ
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/daily.yml/enable" --silent || true
